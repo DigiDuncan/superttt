@@ -8,7 +8,7 @@ from logging import getLogger
 
 logger = getLogger("superttt")
 
-TEXTURES = {name: load_texture(f"resources/superttt/{name}.png") for name in ('x', 'x_gray', 'o', 'o_gray', 'empty')}
+TEXTURES = {name: load_texture(f"resources/superttt/{name}.png") for name in ('x', 'x_gray', 'o', 'o_gray', 'empty', 'stalemate')}
 
 def split_rect(rect: Rect, size: int) -> list[Rect]:
     new_rect_size = rect.scale(1 / size).size
@@ -50,6 +50,9 @@ def draw_board(board: Board, rect: Rect):
             draw_texture_rect(TEXTURES["x"], bg_rect, alpha = 128)
         elif board.state == State.O:
             draw_texture_rect(TEXTURES["o"], bg_rect, alpha = 128)
+
+    if board.stalemate:
+        draw_texture_rect(TEXTURES["stalemate"], bg_rect, alpha = 128)
 
 def get_tile_from_position(point: Point2, board: Board, rect: Rect) -> Tile | None:
     splits = split_rect(rect, board.size)

@@ -1,7 +1,8 @@
-from arcade import Camera2D, View, XYWH
+from arcade import Camera2D, View, XYWH, LBWH, draw_texture_rect
 
 from superttt.game import board
-from superttt.game.drawing import draw_board, get_tile_from_position
+from superttt.game.board import State
+from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES
 
 class SuperTTTView(View):
     def __init__(self):
@@ -11,17 +12,21 @@ class SuperTTTView(View):
         self.game = board.create_board(3, 3)
         self.game_rect = XYWH(*self.center, self.height * 0.9, self.height * 0.9)
 
+        self.current_turn: State = State.X
+        self.current_turn_rect = LBWH(10, 10, 100, 100)
+
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
         tile = get_tile_from_position((x, y), self.game, self.game_rect)
         if tile:
-            if tile.state == board.State.NONE:
-                tile.state = board.State.X
-            elif tile.state == board.State.X:
-                tile.state = board.State.O
-            else:
-                tile.state = board.State.NONE
+            tile.state = self.current_turn
+            self.current_turn = State.O if self.current_turn == State.X else State.X
 
     def on_draw(self) -> bool | None:
         self.clear()
         with self.camera.activate():
             draw_board(self.game, self.game_rect)
+
+        if self.current_turn == State.X:
+            draw_texture_rect(TEXTURES["x"], self.current_turn_rect)
+        else:
+            draw_texture_rect(TEXTURES["o"], self.current_turn_rect)

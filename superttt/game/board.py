@@ -32,6 +32,10 @@ class Board:
         return self.get_state()
 
     @property
+    def stalemate(self) -> bool:
+        return self.state == State.NONE and all(b.state != State.NONE for b in self.items)
+
+    @property
     def size(self) -> int:
         return int(math.sqrt(len(self.items)))
 
