@@ -1,0 +1,6 @@
+[project]
+name = "GDG-2026-2"
+version = "0.0"
+description = "A Game made by Digital Dragons for the GDG jam 2026-2"
+requires-python = ">= 3.13"
+dependencies = ["arcade==3.3.3"]
