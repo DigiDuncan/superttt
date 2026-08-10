@@ -8,7 +8,7 @@ class SuperTTTView(View):
         super().__init__()
         self.camera = Camera2D(projection=XYWH(0, 0, *self.window.size))
 
-        self.game = board.create_board(3, 2)
+        self.game = board.create_board(3, 3)
         self.game_rect = XYWH(*self.center, self.height * 0.9, self.height * 0.9)
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
