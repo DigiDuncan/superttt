@@ -1,5 +1,7 @@
+import arcade
+
 from .board import Board, Tile, State
-from arcade import Rect, LBWH, draw_texture_rect, load_texture, draw_rect_filled
+from arcade import Rect, LBWH, draw_rect_outline, draw_texture_rect, load_texture, draw_rect_filled
 from arcade.types import Point2, Color
 
 from logging import getLogger
@@ -37,6 +39,8 @@ def draw_board(board: Board, rect: Rect):
             elif tile.state == State.O:
                 draw_texture_rect(TEXTURES["o"], split) if board.state == State.O else draw_texture_rect(TEXTURES["o_gray"], split)
     else:
+        bg_rect = rect.scale(1)
+        draw_rect_outline(bg_rect, arcade.color.WHITE)
         for n, split in enumerate(splits):
             draw_board(board.items[n], split) # type: ignore -- it's always a Board at this point
 
