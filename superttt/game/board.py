@@ -10,14 +10,15 @@ class State(Enum):
     O = "O"  # noqa: E741
 
 class Tile:
-    def __init__(self, state: State | None = None) -> None:
+    def __init__(self, state: State | None = None, id: tuple[int, ...] = None) -> None:
         self.state: State = state if state else State.NONE
+        self.id: tuple[int, ...] = id
 
     def __str__(self) -> str:
         return "X" if self.state == State.X else "O" if self.state == State.O else "?"
 
 class Board:
-    def __init__(self, items: list[Tile | Board] | None = None) -> None:
+    def __init__(self, items: list[Tile | Board] | None = None, id: tuple[int, ...] = None) -> None:
         # Because of Arcade being bottom-up, the layout is:
         # 6 7 8
         # 3 4 5
@@ -26,6 +27,8 @@ class Board:
 
         # winning combinations for this board size
         self.winning_combos = get_winning_combos(self.size)
+
+        self.id: tuple[int, ...] = id
 
     @property
     def state(self) -> State:
@@ -67,6 +70,14 @@ class Board:
         
         tile.state = state
 
+    def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> list[tuple[int, ...]]:
+        valid_next_board = latest_move_coord[1:]
+        board = self
+        for coord in valid_next_board:
+            board = board.items[coord]  # type: ignore -- This should be a Board, I hope!!
+
+        return [t.id for t in board.items if t.state == State.NONE]  # type: ignore -- This should be a Board, I hope!!
+
     def __str__(self) -> str:
         if self.type == Tile:
             chunks = [list(batch) for batch in batched(self.items, self.size)]
@@ -89,7 +100,8 @@ def get_winning_combos(size: int) -> list[list[int]]:
     winning_combos.append(list(range(size - 1, size ** 2 - 1, size - 1)))
     return winning_combos
 
-def create_board(size: int, depth: int) -> Board:
+def create_board(size: int, depth: int, id: tuple[int, ...] = tuple()) -> Board:
     if depth == 0:
-        return Tile()  # type: ignore
-    return Board([create_board(size, depth-1) for _ in range(size ** 2)])
+        return Tile(id = id)  # type: ignore
+    board = Board([create_board(size, depth-1, (*id, idx)) for idx in range(size ** 2)], id)
+    return board

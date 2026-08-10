@@ -10,13 +10,13 @@ logger = getLogger("superttt")
 
 TEXTURES = {name: load_texture(f"resources/superttt/{name}.png") for name in ('x', 'x_gray', 'o', 'o_gray', 'empty', 'stalemate')}
 
-def split_rect(rect: Rect, size: int) -> list[Rect]:
-    new_rect_size = rect.scale(1 / size).size
+def split_rect(rect: Rect, grid_size: int) -> list[Rect]:
+    new_rect_size = rect.scale(1 / grid_size).size
     start_x, start_y = rect.bottom_left
 
     new_rects = []
-    for i in range(size):
-        for j in range(size):
+    for i in range(grid_size):
+        for j in range(grid_size):
             new_rects.append(LBWH(start_x + (new_rect_size.x * j), start_y + (new_rect_size.y * i), new_rect_size.x, new_rect_size.y))
     return new_rects
 
@@ -65,3 +65,10 @@ def get_tile_from_position(point: Point2, board: Board, rect: Rect) -> Tile | No
         for n, split in enumerate(splits):
             if point in split:
                 return get_tile_from_position(point, board.items[n], split) # type: ignore -- it's always a Board at this point
+
+def get_rect_from_coordinate(coord: tuple[int, ...], rect: Rect, grid_size: int) -> Rect:
+    current_rect = rect
+    for n, i in enumerate(coord):
+        splits = split_rect(current_rect, grid_size)
+        current_rect = splits[i]
+    return current_rect
