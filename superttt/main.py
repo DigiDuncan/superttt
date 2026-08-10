@@ -53,9 +53,10 @@ class SuperTTTView(View):
             self.current_turn = State.O if self.current_turn == State.X else State.X
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
-        tile = get_tile_from_position((x, y), self.game, self.game_rect)
-        if tile:
-            self.debug_text.text = str(tile.id)
+        if self.debug:
+            tile = get_tile_from_position((x, y), self.game, self.game_rect)
+            if tile:
+                self.debug_text.text = str(tile.id)
 
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.R:
