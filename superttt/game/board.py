@@ -57,6 +57,10 @@ class Board:
     def type(self) -> type[Board] | type[Tile]:
         return type(self.items[0])
 
+    @property
+    def depth(self) -> int:
+        return len(self.id)
+
     def get_state(self) -> State:
         for s in [State.X, State.O]:
             for combo in self.winning_combos:
@@ -89,11 +93,23 @@ class Board:
 
         return board
 
+    def get_all_none_state_tiles(self):
+        if self.type == Tile:
+            if self.state != State.NONE:
+                return []
+            else:
+                return [t for t in self.items if t.state == State.NONE]
+        else:
+            if self.state != State.NONE:
+                return []
+            else:
+                return [b.get_all_none_state_tiles() for b in self.items]
+
     def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> list[tuple[int, ...]]:
         board = self.get_next_board_from_latest_move(latest_move_coord)
 
         if board.state != State.NONE:  # Wild
-            return [t.id for t in flatten(get_all_none_state_tiles(self))]
+            return [t.id for t in flatten(self.get_all_none_state_tiles())]
     
         return [t.id for t in board.items if t.state == State.NONE]  # type: ignore -- This should be a Board, I hope!!
 
@@ -118,18 +134,6 @@ def get_winning_combos(size: int) -> list[list[int]]:
     # Diag 2
     winning_combos.append(list(range(size - 1, size ** 2 - 1, size - 1)))
     return winning_combos
-
-def get_all_none_state_tiles(board: Board):
-    if board.type == Tile:
-        if board.state != State.NONE:
-            return []
-        else:
-            return [t for t in board.items if t.state == State.NONE]
-    else:
-        if board.state != State.NONE:
-            return []
-        else:
-            return [get_all_none_state_tiles(b) for b in board.items]
 
 def create_board(size: int, depth: int, id: tuple[int, ...] = tuple()) -> Board:
     if depth == 0:
