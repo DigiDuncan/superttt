@@ -1,6 +1,12 @@
 [project]
-name = "GDG-2026-2"
+name = "superttt"
 version = "0.0"
-description = "A Game made by Digital Dragons for the GDG jam 2026-2"
+description = "Like Tic-Tac-Toe, but more."
 requires-python = ">= 3.13"
-dependencies = ["arcade==3.3.3"]
+dependencies = [
+    "arcade==3.3.3",
+    "digiformatter@git+https://github.com/DigiDuncan/DigiFormatter"
+]
+
+[tool.setuptools.packages.find]     
+include = ["superttt"]
