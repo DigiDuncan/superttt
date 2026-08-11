@@ -1,4 +1,4 @@
-from arcade import Camera2D, Rect, Text, View, XYWH, LBWH, draw_rect_filled, draw_rect_outline, draw_texture_rect
+from arcade import Camera2D, Text, View, XYWH, LBWH, draw_rect_filled, draw_texture_rect
 import arcade.key
 
 from superttt.game import board
@@ -39,6 +39,8 @@ class SuperTTTView(View):
     def reset(self):
         self.game = board.create_board(self.grid_size, self.depth)
         self.current_turn = State.X
+        self.latest_tile = None
+        self.next_moves = []
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
         tile = get_tile_from_position((x, y), self.game, self.game_rect)
@@ -61,8 +63,20 @@ class SuperTTTView(View):
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.R:
             self.reset()
-        if symbol == arcade.key.D:
+        elif symbol == arcade.key.D:
             self.debug = not self.debug
+        elif symbol == arcade.key.NUM_1:
+            self.depth = 1
+            self.reset()
+        elif symbol == arcade.key.NUM_2:
+            self.depth = 2
+            self.reset()
+        elif symbol == arcade.key.NUM_3:
+            self.depth = 3
+            self.reset()
+        elif symbol == arcade.key.NUM_4:
+            self.depth = 4
+            self.reset()
 
     def on_draw(self) -> bool | None:
         self.clear()
