@@ -45,7 +45,8 @@ def draw_board(board: Board, rect: Rect):
         for n, split in enumerate(splits):
             draw_board(board.items[n], split) # type: ignore -- it's always a Board at this point
 
-    if board.state:
+    if board.state != State.NONE:
+        draw_rect_filled(bg_rect, (0, 0, 0, 200))
         if board.state == State.X:
             draw_texture_rect(TEXTURES["x"], bg_rect, alpha = 128)
         elif board.state == State.O:

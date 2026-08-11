@@ -1,0 +1,22 @@
+# TODO
+- New Game Setup
+    - Grid Size (default 3, range 2-5)
+    - Depth (default 2, range 1-4)
+    - Load option
+- QOL
+    - Game Timer?
+    - Better textures for lines, bg
+    - Logo?
+- Networking
+    - Local play
+    - P2P connection
+    - Assign player 1/player 2
+- Saving
+    - Save board to file
+    - Load board from file
+    - Start a multiplayer game from a save
+- SFX
+    - Place piece
+    - Win sub-board
+    - Stalemate sub-board
+    - Game complete

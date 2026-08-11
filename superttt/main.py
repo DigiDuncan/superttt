@@ -13,7 +13,7 @@ class SuperTTTView(View):
         self.camera = Camera2D(projection=XYWH(0, 0, *self.window.size))
 
         self.grid_size = 3
-        self.depth = 3
+        self.depth = 2
 
         self.game = board.create_board(self.grid_size, self.depth)
         self.game_rect = XYWH(*self.center, self.height * 0.9, self.height * 0.9)
