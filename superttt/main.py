@@ -1,11 +1,12 @@
 import itertools
 
-from arcade import Camera2D, Text, View, XYWH, LBWH, draw_rect_filled, draw_texture_rect
+from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, Window, draw_rect_filled, draw_texture_rect
 import arcade.key
 
 from superttt.game import board
 from superttt.game.board import State, Tile
 from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate
+from .context import nav
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
 
@@ -101,3 +102,42 @@ class SuperTTTView(View):
         if self.latest_tile and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
             for move in self.next_moves:
                 draw_rect_filled(get_rect_from_coordinate(move, self.game_rect, self.game.size), (0, 255, 0, 128))
+
+class StartView(View):
+    def __init__(self) -> None:
+        super().__init__()
+        self.spritelist = SpriteList()
+
+        # This is what happens when I don't have Mint.
+        self.logo = Sprite("./resources/superttt/logo.png")
+        self.logo.center_x = self.center_x
+        self.logo.center_y = self.height * 0.75
+        self.spritelist.append(self.logo)
+
+        self.new_game = Sprite("./resources/superttt/new_game.png")
+        self.new_game.scale = 0.5
+        self.new_game.center_x = self.center_x
+        self.new_game.center_y = self.height * 0.4
+        self.spritelist.append(self.new_game)
+
+        self.quit = Sprite("./resources/superttt/quit.png")
+        self.quit.scale = 0.5
+        self.quit.center_x = self.center_x
+        self.quit.center_y = self.height * 0.25
+        self.spritelist.append(self.quit)
+
+    def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
+        if (x, y) in self.new_game.rect:
+            nav.push(SuperTTTView())
+        elif (x, y) in self.quit.rect:
+            arcade.close_window()
+
+    def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
+        if symbol == arcade.key.ENTER or symbol == arcade.key.NUM_ENTER:
+            nav.push(SuperTTTView())
+        if symbol == arcade.key.BACKSPACE:
+            arcade.close_window()
+
+    def on_draw(self) -> bool | None:
+        self.clear()
+        self.spritelist.draw()

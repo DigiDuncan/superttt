@@ -1,6 +1,6 @@
 from arcade import load_font
 
-from superttt.main import SuperTTTView
+from superttt.main import StartView, SuperTTTView
 
 from .context import nav
 from .window import Window
@@ -14,7 +14,7 @@ def main():
     load_font("resources/generic/gohu.ttf")
 
     win = Window(title="Super Tic-Tac-Toe")
-    nav.setup(SuperTTTView(), win)
+    nav.setup(StartView(), win)
     win.run()
 
 
