@@ -1,16 +1,20 @@
 from __future__ import annotations
-from enum import Enum
+from enum import StrEnum
 from functools import cache
 import math
 from itertools import batched
 
-class State(Enum):
-    NONE = None
+from superttt.lib.utils import flatten
+
+class State(StrEnum):
+    NONE = "#"
     X = "X"
     O = "O"  # noqa: E741
 
+type Data = tuple[str | Data, ...]
+
 class Tile:
-    def __init__(self, state: State | None = None, id: tuple[int, ...] = None) -> None:
+    def __init__(self, state: State | None = None, id: tuple[int, ...] = None) -> None: # type: ignore
         self.state: State = state if state else State.NONE
         self.id: tuple[int, ...] = id
 
@@ -18,7 +22,7 @@ class Tile:
         return "X" if self.state == State.X else "O" if self.state == State.O else "?"
 
 class Board:
-    def __init__(self, items: list[Tile | Board] | None = None, id: tuple[int, ...] = None) -> None:
+    def __init__(self, items: list[Tile | Board] | None = None, id: tuple[int, ...] = None) -> None: # type: ignore
         # Because of Arcade being bottom-up, the layout is:
         # 6 7 8
         # 3 4 5
@@ -33,6 +37,13 @@ class Board:
     @property
     def state(self) -> State:
         return self.get_state()
+
+    @property
+    def data(self) -> Data:
+        if self.type == Tile:
+            return tuple(t.state.value for t in self.items)
+        else:
+            return tuple(b.data for b in self.items)  # type: ignore -- This should be a Board, I hope!!
 
     @property
     def stalemate(self) -> bool:
@@ -70,12 +81,20 @@ class Board:
         
         tile.state = state
 
-    def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> list[tuple[int, ...]]:
+    def get_next_board_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> Board:
         valid_next_board = latest_move_coord[1:]
         board = self
         for coord in valid_next_board:
             board = board.items[coord]  # type: ignore -- This should be a Board, I hope!!
 
+        return board
+
+    def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> list[tuple[int, ...]]:
+        board = self.get_next_board_from_latest_move(latest_move_coord)
+
+        if board.state != State.NONE:  # Wild
+            return [t.id for t in flatten(get_all_none_state_tiles(self))]
+    
         return [t.id for t in board.items if t.state == State.NONE]  # type: ignore -- This should be a Board, I hope!!
 
     def __str__(self) -> str:
@@ -99,6 +118,18 @@ def get_winning_combos(size: int) -> list[list[int]]:
     # Diag 2
     winning_combos.append(list(range(size - 1, size ** 2 - 1, size - 1)))
     return winning_combos
+
+def get_all_none_state_tiles(board: Board):
+    if board.type == Tile:
+        if board.state != State.NONE:
+            return []
+        else:
+            return [t for t in board.items if t.state == State.NONE]
+    else:
+        if board.state != State.NONE:
+            return []
+        else:
+            return [get_all_none_state_tiles(b) for b in board.items]
 
 def create_board(size: int, depth: int, id: tuple[int, ...] = tuple()) -> Board:
     if depth == 0:

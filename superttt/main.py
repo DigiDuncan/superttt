@@ -77,6 +77,8 @@ class SuperTTTView(View):
         elif symbol == arcade.key.NUM_4:
             self.depth = 4
             self.reset()
+        elif symbol == arcade.key.P:
+            print(self.game.data)
 
     def on_draw(self) -> bool | None:
         self.clear()
@@ -91,6 +93,6 @@ class SuperTTTView(View):
         if self.debug:
             self.debug_text.draw()
 
-        if self.next_moves:
+        if self.latest_tile and self.next_moves and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
             for move in self.next_moves:
                 draw_rect_filled(get_rect_from_coordinate(move, self.game_rect, self.game.size), (0, 255, 0, 128))
