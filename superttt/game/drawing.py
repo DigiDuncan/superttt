@@ -30,7 +30,7 @@ def split_rect(rect: Rect, grid_size: int) -> list[Rect]:
     return new_rects
 
 def draw_board(board: Board, rect: Rect):
-    if rect.width != rect.height:
+    if round(rect.width, 1) != round(rect.height, 1):
         logger.warning(f"Rect not a square! {rect.width}x{rect.height}")
 
     splits = split_rect(rect, board.size)

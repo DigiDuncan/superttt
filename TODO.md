@@ -1,5 +1,5 @@
 # TODO
-- New Game Setup
+- New Game Setup Screen
     - Grid Size (default 3, range 2-5)
     - Depth (default 2, range 1-4)
     - Load option
