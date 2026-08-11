@@ -3,12 +3,21 @@ import arcade
 from .board import Board, Tile, State
 from arcade import Rect, LBWH, draw_rect_outline, draw_texture_rect, load_texture, draw_rect_filled
 from arcade.types import Point2, Color
+import arcade.color
 
 from logging import getLogger
 
 logger = getLogger("superttt")
 
 TEXTURES = {name: load_texture(f"resources/superttt/{name}.png") for name in ('x', 'x_gray', 'o', 'o_gray', 'empty', 'stalemate')}
+
+DEPTH_COLORS = {
+    0: arcade.color.RED,
+    1: arcade.color.GREEN,
+    2: arcade.color.BLUE,
+    3: arcade.color.YELLOW,
+    4: arcade.color.PINK
+}
 
 def split_rect(rect: Rect, grid_size: int) -> list[Rect]:
     new_rect_size = rect.scale(1 / grid_size).size
