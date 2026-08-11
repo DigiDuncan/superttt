@@ -1,3 +1,5 @@
+import itertools
+
 from arcade import Camera2D, Text, View, XYWH, LBWH, draw_rect_filled, draw_texture_rect
 import arcade.key
 
@@ -6,6 +8,9 @@ from superttt.game.board import State, Tile
 from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
+
+def all_ids(grid_size: int, depth: int) -> list[tuple[int, ...]]:
+    return list(itertools.combinations_with_replacement(range(grid_size ** 2), depth))
 
 class SuperTTTView(View):
     def __init__(self):
@@ -22,7 +27,7 @@ class SuperTTTView(View):
         self.current_turn_rect = LBWH(10, 10, 100, 100)
 
         self.latest_tile: Tile | None = None
-        self.next_moves: list[tuple[int, ...]] = []
+        self.next_moves: list[tuple[int, ...]] = all_ids(self.grid_size, self.depth)
 
         self.debug = False
         self.debug_text = Text(
@@ -40,14 +45,14 @@ class SuperTTTView(View):
         self.game = board.create_board(self.grid_size, self.depth)
         self.current_turn = State.X
         self.latest_tile = None
-        self.next_moves = []
+        self.next_moves = all_ids(self.grid_size, self.depth)
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
         tile = get_tile_from_position((x, y), self.game, self.game_rect)
         if tile:
             if tile.state != State.NONE:
                 return
-            if self.next_moves and tile.id not in self.next_moves:
+            if tile.id not in self.next_moves:
                 return
             tile.state = self.current_turn
             self.latest_tile = tile
@@ -93,6 +98,6 @@ class SuperTTTView(View):
         if self.debug:
             self.debug_text.draw()
 
-        if self.latest_tile and self.next_moves and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
+        if self.latest_tile and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
             for move in self.next_moves:
                 draw_rect_filled(get_rect_from_coordinate(move, self.game_rect, self.game.size), (0, 255, 0, 128))
