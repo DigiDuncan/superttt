@@ -113,6 +113,16 @@ class Board:
     
         return [t.id for t in board.items if t.state == State.NONE]  # type: ignore -- This should be a Board, I hope!!
 
+    @classmethod
+    def from_data(cls, data: Data) -> Board:
+        b = Board()
+        for item in data:
+            if isinstance(item, tuple):
+                b.items.append(Board.from_data(item))
+            elif isinstance(item, str):
+                state = State.X if item == "X" else State.O if item == "O" else State.NONE
+                b.items.append(Tile(state))
+
     def __str__(self) -> str:
         if self.type == Tile:
             chunks = [list(batch) for batch in batched(self.items, self.size)]
