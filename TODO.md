@@ -7,6 +7,7 @@
     - Game Timer?
     - Better textures for lines, bg
     - Logo?
+    - Zoom option
 - Networking
     - Local play
     - P2P connection
@@ -20,3 +21,5 @@
     - Win sub-board
     - Stalemate sub-board
     - Game complete
+- Rendering
+    - Improve render times
