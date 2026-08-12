@@ -1,7 +1,9 @@
 import random
 
-from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_rect_filled, draw_texture_rect
+from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_rect_filled, draw_texture_rect, Rect, LRBT
 import arcade.key
+
+from pyglet.graphics import Batch
 
 from superttt.game import board
 from superttt.game.board import State, Tile
@@ -13,12 +15,13 @@ from superttt.lib.gradient import draw_rect_gradient
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
 
 class SuperTTTView(View):
-    def __init__(self):
+    def __init__(self, grid_size: int = 3, depth: int = 2):
         super().__init__()
         self.camera = Camera2D(projection=XYWH(0, 0, *self.window.size))
+        self.spritelist = SpriteList()
 
-        self.grid_size = 3
-        self.depth = 2
+        self.grid_size = grid_size
+        self.depth = depth
 
         self.game = board.create_board(self.grid_size, self.depth)
         self.game_rect = XYWH(*self.center, self.height * 0.9, self.height * 0.9)
@@ -38,6 +41,12 @@ class SuperTTTView(View):
         self.paused_sprite.center_y = self.center_y
         self.spritelist.append(self.paused_sprite)
         self.paused_sprite.visible = False
+
+        self.quit = Sprite("./resources/superttt/quit.png")
+        self.quit.scale = 0.5
+        self.quit.bottom = 10
+        self.quit.right = self.width - 10
+        self.spritelist.append(self.quit)
 
         self.timer_text = Text(
             "0:00",
@@ -81,6 +90,9 @@ class SuperTTTView(View):
             self.latest_tile = tile
             self.next_moves = self.game.get_valid_moves_from_latest_move(self.latest_tile.id)
             self.current_turn = State.O if self.current_turn == State.X else State.X
+
+        if (x, y) in self.quit.rect:
+            nav.push(StartView())
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
         if self.debug:
@@ -143,13 +155,12 @@ class StartView(View):
 
         self.gradient = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
 
-        # This is what happens when I don't have Mint.
         self.logo = Sprite("./resources/superttt/logo.png")
         self.logo.center_x = self.center_x
         self.logo.center_y = self.height * 0.75
         self.spritelist.append(self.logo)
 
-        self.splash_text = Text("Splash did not load!", self.logo.center_x, self.logo.bottom + 30, anchor_y = "top", font_name = "Static", color = arcade.color.RED, font_size = 32)
+        self.splash_text = Text("Splash did not load!", self.logo.center_x, self.logo.bottom + 30, anchor_y = "top", font_name = "Static", color = arcade.color.RED, font_size = 24)
 
         self.new_game = Sprite("./resources/superttt/new_game.png")
         self.new_game.scale = 0.5
@@ -183,9 +194,14 @@ class StartView(View):
 
     def on_draw(self) -> bool | None:
         self.clear()
-        draw_rect_gradient(self.window.rect, self.gradient[0], self.gradient[1])
+        # draw_rect_gradient(self.window.rect, self.gradient[0], self.gradient[1])
         self.spritelist.draw()
         self.splash_text.draw()
+
+class RectText(Text):
+    @property
+    def rect(self) -> Rect:
+        return LRBT(self.left, self.right, self.bottom, self.top)
 
 class SettingsView(View):
     def __init__(self) -> None:
@@ -198,6 +214,80 @@ class SettingsView(View):
         self.logo.top = self.height - 10
         self.spritelist.append(self.logo)
 
+        # This is what happens when I don't have Mint.
+        self.start = Sprite("./resources/superttt/start.png")
+        self.start.scale = 0.5
+        self.start.bottom = 10
+        self.start.left = 10
+        self.spritelist.append(self.start)
+
+        self.back = Sprite("./resources/superttt/back.png")
+        self.back.scale = 0.5
+        self.back.bottom = 10
+        self.back.right = self.width - 10
+        self.spritelist.append(self.back)
+
+        self.text_batch = Batch()
+
+        self.grid_size_label = self.splash_text = Text("Grid Size", self.width * 0.4, self.center_y + 50, anchor_x = "right", font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.depth_label = self.splash_text = Text("Depth", self.width * 0.4, self.center_y - 50, anchor_x = "right", font_name = "Static", font_size = 32, batch = self.text_batch)
+
+        self.grid_size_2 = self.splash_text = RectText("2", self.width * 0.6, self.center_y + 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.grid_size_3 = self.splash_text = RectText("3", self.width * 0.6 + 50, self.center_y + 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.grid_size_4 = self.splash_text = RectText("4", self.width * 0.6 + 100, self.center_y + 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.grid_size_5 = self.splash_text = RectText("5", self.width * 0.6 + 150, self.center_y + 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+
+        self.depth_1 = self.splash_text = RectText("1", self.width * 0.6, self.center_y - 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.depth_2 = self.splash_text = RectText("2", self.width * 0.6 + 50, self.center_y - 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.depth_3 = self.splash_text = RectText("3", self.width * 0.6 + 100, self.center_y - 50, font_name = "Static", font_size = 32, batch = self.text_batch)
+        self.depth_4 = self.splash_text = RectText("4", self.width * 0.6 + 150, self.center_y +-50, font_name = "Static", font_size = 32, batch = self.text_batch)
+
+        self.caution = Sprite("./resources/superttt/caution.png")
+        self.caution.center_x = self.depth_4.rect.center_x
+        self.caution.center_y = self.depth_4.rect.center_y
+        self.caution.height = self.depth_4.rect.height
+        self.caution.width = self.depth_4.rect.height
+        self.caution.alpha = 128
+        self.spritelist.append(self.caution)
+
+        self.grid_size = 3
+        self.depth = 2
+
+        self.update_text_colors()
+
+    def update_text_colors(self):
+        for t in [self.grid_size_2, self.grid_size_3, self.grid_size_4, self.grid_size_5, self.depth_1, self.depth_2, self.depth_3, self.depth_4]:
+            t.color = arcade.color.WHITE
+
+        [self.grid_size_2, self.grid_size_3, self.grid_size_4, self.grid_size_5][self.grid_size - 2].color = arcade.color.RED
+        [self.depth_1, self.depth_2, self.depth_3, self.depth_4][self.depth - 1].color = arcade.color.RED
+
+    def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
+        if (x, y) in self.start.rect:
+            nav.push(SuperTTTView(self.grid_size, self.depth))
+        elif (x, y) in self.back.rect:
+            nav.pop()
+
+        if (x, y) in self.grid_size_2.rect:
+            self.grid_size = 2
+        elif (x, y) in self.grid_size_3.rect:
+            self.grid_size = 3
+        elif (x, y) in self.grid_size_4.rect:
+            self.grid_size = 4
+        elif (x, y) in self.grid_size_5.rect:
+            self.grid_size = 5
+
+        if (x, y) in self.depth_1.rect:
+            self.depth = 1
+        elif (x, y) in self.depth_2.rect:
+            self.depth = 2
+        elif (x, y) in self.depth_3.rect:
+            self.depth = 3
+        elif (x, y) in self.depth_4.rect:
+            self.depth = 4
+
+        self.update_text_colors()
+    
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.BACKSPACE:
             nav.pop()
@@ -205,3 +295,4 @@ class SettingsView(View):
     def on_draw(self) -> bool | None:
         self.clear()
         self.spritelist.draw()
+        self.text_batch.draw()

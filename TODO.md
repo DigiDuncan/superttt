@@ -1,12 +1,7 @@
 # TODO
-- New Game Setup Screen
-    - Grid Size (default 3, range 2-5)
-    - Depth (default 2, range 1-4)
-    - Load option
+- Load option
 - QOL
-    - Game Timer?
     - Better textures for lines, bg
-    - Logo?
     - Zoom option
 - Networking
     - Local play
