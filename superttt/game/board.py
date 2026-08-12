@@ -19,7 +19,7 @@ class Tile:
         self.id: tuple[int, ...] = id
 
     def __str__(self) -> str:
-        return "X" if self.state == State.X else "O" if self.state == State.O else "?"
+        return "X" if self.state == State.X else "O" if self.state == State.O else "#"
 
 class Board:
     def __init__(self, items: list[Tile | Board] | None = None, id: tuple[int, ...] = None) -> None: # type: ignore
@@ -105,7 +105,10 @@ class Board:
             else:
                 return [b.get_all_none_state_tiles() for b in self.items]
 
-    def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> list[tuple[int, ...]]:
+    def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...] | None) -> list[tuple[int, ...]]:
+        if latest_move_coord is None:
+            return [t.id for t in flatten(self.get_all_none_state_tiles())]
+
         board = self.get_next_board_from_latest_move(latest_move_coord)
 
         if board.state != State.NONE:  # Wild
@@ -122,6 +125,7 @@ class Board:
             elif isinstance(item, str):
                 state = State.X if item == "X" else State.O if item == "O" else State.NONE
                 b.items.append(Tile(state))
+        return b
 
     def __str__(self) -> str:
         if self.type == Tile:

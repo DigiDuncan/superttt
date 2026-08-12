@@ -1,7 +1,6 @@
 from arcade import load_font
 
-from superttt.main import StartView, SuperTTTView
-
+from superttt.main import StartView
 from .context import nav
 from .window import Window
 from .lib import logging
@@ -13,7 +12,7 @@ def main():
     # Load debug font
     load_font("resources/generic/gohu.ttf")
 
-    win = Window(title="Super Tic-Tac-Toe")
+    win = Window(title="Multi-Layer Tic-Tac-Toe")
     nav.setup(StartView(), win)
     win.run()
 

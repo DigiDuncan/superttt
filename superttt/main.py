@@ -1,17 +1,16 @@
-import itertools
+import random
 
-from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, Window, draw_rect_filled, draw_texture_rect
+from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_rect_filled, draw_texture_rect
 import arcade.key
 
 from superttt.game import board
 from superttt.game.board import State, Tile
 from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate
+from superttt.lib.utils import format_time
 from .context import nav
+from superttt.lib.gradient import draw_rect_gradient
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
-
-def all_ids(grid_size: int, depth: int) -> list[tuple[int, ...]]:
-    return list(itertools.combinations_with_replacement(range(grid_size ** 2), depth))
 
 class SuperTTTView(View):
     def __init__(self):
@@ -28,7 +27,27 @@ class SuperTTTView(View):
         self.current_turn_rect = LBWH(10, 10, 100, 100)
 
         self.latest_tile: Tile | None = None
-        self.next_moves: list[tuple[int, ...]] = all_ids(self.grid_size, self.depth)
+        self.next_moves: list[tuple[int, ...]] = self.game.get_valid_moves_from_latest_move(None)
+
+        self.time_elapsed: float = 0.0
+        self.paused = False
+
+        self.spritelist = SpriteList()
+        self.paused_sprite = Sprite("./resources/superttt/paused.png")
+        self.paused_sprite.center_x = self.center_x
+        self.paused_sprite.center_y = self.center_y
+        self.spritelist.append(self.paused_sprite)
+        self.paused_sprite.visible = False
+
+        self.timer_text = Text(
+            "0:00",
+            10,
+            self.height - 10,
+            font_size=24,
+            anchor_y="top",
+            font_name="Static",
+            color = arcade.color.RED
+        )
 
         self.debug = False
         self.debug_text = Text(
@@ -46,9 +65,12 @@ class SuperTTTView(View):
         self.game = board.create_board(self.grid_size, self.depth)
         self.current_turn = State.X
         self.latest_tile = None
-        self.next_moves = all_ids(self.grid_size, self.depth)
+        self.next_moves = self.game.get_valid_moves_from_latest_move(None)
+        self.time_elapsed: float = 0.0
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
+        if self.paused:
+            return
         tile = get_tile_from_position((x, y), self.game, self.game_rect)
         if tile:
             if tile.state != State.NONE:
@@ -85,6 +107,14 @@ class SuperTTTView(View):
             self.reset()
         elif symbol == arcade.key.P:
             print(self.game.data)
+        elif symbol == arcade.key.SPACE:
+            self.paused = not self.paused
+            self.paused_sprite.visible = self.paused
+
+    def on_update(self, delta_time: float):
+        if not self.paused:
+            self.time_elapsed += delta_time
+        self.timer_text.text = format_time(self.time_elapsed, 0)
 
     def on_draw(self) -> bool | None:
         self.clear()
@@ -103,16 +133,23 @@ class SuperTTTView(View):
             for move in self.next_moves:
                 draw_rect_filled(get_rect_from_coordinate(move, self.game_rect, self.game.size), (0, 255, 0, 128))
 
+        self.timer_text.draw()
+        self.spritelist.draw()
+
 class StartView(View):
     def __init__(self) -> None:
         super().__init__()
         self.spritelist = SpriteList()
+
+        self.gradient = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
 
         # This is what happens when I don't have Mint.
         self.logo = Sprite("./resources/superttt/logo.png")
         self.logo.center_x = self.center_x
         self.logo.center_y = self.height * 0.75
         self.spritelist.append(self.logo)
+
+        self.splash_text = Text("Splash did not load!", self.logo.center_x, self.logo.bottom + 30, anchor_y = "top", font_name = "Static", color = arcade.color.RED, font_size = 32)
 
         self.new_game = Sprite("./resources/superttt/new_game.png")
         self.new_game.scale = 0.5
@@ -126,9 +163,15 @@ class StartView(View):
         self.quit.center_y = self.height * 0.25
         self.spritelist.append(self.quit)
 
+        self.setup()
+
+    def setup(self):
+        with open("./resources/superttt/splashes.txt") as f:
+            self.splash_text.text = random.choice(f.readlines()).strip()
+
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
         if (x, y) in self.new_game.rect:
-            nav.push(SuperTTTView())
+            nav.push(SettingsView())
         elif (x, y) in self.quit.rect:
             arcade.close_window()
 
@@ -137,6 +180,27 @@ class StartView(View):
             nav.push(SuperTTTView())
         if symbol == arcade.key.BACKSPACE:
             arcade.close_window()
+
+    def on_draw(self) -> bool | None:
+        self.clear()
+        draw_rect_gradient(self.window.rect, self.gradient[0], self.gradient[1])
+        self.spritelist.draw()
+        self.splash_text.draw()
+
+class SettingsView(View):
+    def __init__(self) -> None:
+        super().__init__()
+        self.spritelist = SpriteList()
+
+        self.logo = Sprite("./resources/superttt/settings.png")
+        self.logo.scale = 0.75
+        self.logo.center_x = self.center_x
+        self.logo.top = self.height - 10
+        self.spritelist.append(self.logo)
+
+    def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
+        if symbol == arcade.key.BACKSPACE:
+            nav.pop()
 
     def on_draw(self) -> bool | None:
         self.clear()

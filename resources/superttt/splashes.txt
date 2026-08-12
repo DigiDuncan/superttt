@@ -1,0 +1,7 @@
+Aria's favorite game!
+Some people call it Noughts and Crosses!
+I read a reasearch paper for this!
+Made in Python!
+Made in Arcade!
+Dragon helped!
+Recursion depth limit exceeded!
