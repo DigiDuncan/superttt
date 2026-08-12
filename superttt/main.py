@@ -250,6 +250,11 @@ class SettingsView(View):
         self.caution.alpha = 128
         self.spritelist.append(self.caution)
 
+        self.caution_text = Text("Depth 4 is extremely laggy, and will take several hours to play!\nSelect this at your own peril!",
+                                 self.center_x, self.height * 0.25, anchor_x = "center", anchor_y = "center", font_name = "Static",
+                                 font_size = 24, color = arcade.color.YELLOW, multiline = True, width = self.width / 2, align = "center")
+        self.hovering_caution = False
+
         self.grid_size = 3
         self.depth = 2
 
@@ -287,6 +292,9 @@ class SettingsView(View):
             self.depth = 4
 
         self.update_text_colors()
+
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
+        self.hovering_caution = (x, y) in self.caution.rect
     
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.BACKSPACE:
@@ -296,3 +304,5 @@ class SettingsView(View):
         self.clear()
         self.spritelist.draw()
         self.text_batch.draw()
+        if self.hovering_caution:
+            self.caution_text.draw()
