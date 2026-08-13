@@ -106,6 +106,9 @@ class Board:
                 return [b.get_all_none_state_tiles() for b in self.items]
 
     def get_valid_moves_from_latest_move(self, latest_move_coord: tuple[int, ...] | None) -> list[tuple[int, ...]]:
+        if self.state != State.NONE:
+            return []
+
         if latest_move_coord is None:
             return [t.id for t in flatten(self.get_all_none_state_tiles())]
 

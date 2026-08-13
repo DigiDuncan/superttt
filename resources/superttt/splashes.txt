@@ -1,7 +1,11 @@
 Aria's favorite game!
 Some people call it Noughts and Crosses!
-I read a reasearch paper for this!
+I read a research paper for this!
 Made in Python!
 Made in Arcade!
 Dragon helped!
 Recursion depth limit exceeded!
+XOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXOXO
+I promise, it's more fun than it sounds!
+Graphics stolen from Charm!
+I just want to send bytes from here to there!
