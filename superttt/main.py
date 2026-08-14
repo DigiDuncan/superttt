@@ -60,7 +60,7 @@ class SuperTTTView(View):
 
         self.debug = False
         self.debug_text = Text(
-            "DEBUG",
+            "[DEBUG]",
             5,
             self.height - 5,
             font_size=11,
@@ -98,25 +98,16 @@ class SuperTTTView(View):
         if self.debug:
             tile = get_tile_from_position((x, y), self.game, self.game_rect)
             if tile:
-                self.debug_text.text = str(tile.id)
+                self.debug_text.text = "[DEBUG] " + str(tile.id)
+            else:
+                self.debug_text.text = "[DEBUG]"
 
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.R:
-            self.reset()
+            if self.debug:
+                self.reset()
         elif symbol == arcade.key.D:
             self.debug = not self.debug
-        elif symbol == arcade.key.NUM_1:
-            self.depth = 1
-            self.reset()
-        elif symbol == arcade.key.NUM_2:
-            self.depth = 2
-            self.reset()
-        elif symbol == arcade.key.NUM_3:
-            self.depth = 3
-            self.reset()
-        elif symbol == arcade.key.NUM_4:
-            self.depth = 4
-            self.reset()
         elif symbol == arcade.key.P:
             print(self.game.data)
         elif symbol == arcade.key.SPACE:
@@ -194,7 +185,7 @@ class StartView(View):
 
     def on_draw(self) -> bool | None:
         self.clear()
-        # draw_rect_gradient(self.window.rect, self.gradient[0], self.gradient[1])
+        draw_rect_gradient(self.window.rect, self.gradient[0], self.gradient[1])
         self.spritelist.draw()
         self.splash_text.draw()
 
