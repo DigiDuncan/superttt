@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import queue
 import socket
 import threading
 import urllib.request
+import sys
 from dataclasses import asdict, dataclass
 from queue import Queue
 from string import ascii_uppercase
@@ -11,6 +13,8 @@ from time import time_ns
 from typing import ClassVar, Self
 
 from arcade import View, Window
+
+from superttt.lib.gradient import F
 
 ROOM_CHR = ascii_uppercase
 ROOM_MAP = {s: idx for idx, s in enumerate(ROOM_CHR)}
@@ -74,18 +78,20 @@ class ThreadScope:
     def has_started(self) -> bool:
         return self._has_started
 
-    def start(self):
-        if self._thread.is_alive() or self.has_started:
+    def start(self) -> bool:
+        if self._thread.is_alive() or self._has_started:
             # TODO: logging print("This thread is currently alive and cannot be started again.")
             # TODO: logging print("Cannot restart a thread. The close event has been set.")
-            return
+            return False
         self._has_started = True
         self._thread.start()
+        return True
 
-    def stop(self):
+    def stop(self) -> bool:
         if not self._thread.is_alive():
-            return
+            return False
         self._close_event.set()
+        return True
 
     def watch(self):
         try:
@@ -222,6 +228,7 @@ class Lighthouse(ThreadScope):
         self._connection: socket.socket
 
     def _enter(self):
+        print("starting a socket")
         self._connection = s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(self._addr)
@@ -235,6 +242,7 @@ class Lighthouse(ThreadScope):
             pass # TODO: track accumulated? reset on connection?
         else:
             # TODO: log address in some way?
+            connection.setblocking(False)
             self._queue.put(connection)
 
     def _exit(self):
@@ -248,7 +256,77 @@ class Facilitator(ThreadScope):
     """
     def __init__(self, conn_queue: Queue[socket.socket], close_event: threading.Event, name: str | None = None) -> None:
         super().__init__(close_event, name)
-        self._connection = conn_queue
+        self._connection_queue = conn_queue
+        self._connections: list[socket.socket] = []
 
-class Client:
-    pass
+    def _run(self):
+        self._meet_new_connections()
+
+    def _meet_new_connections(self):
+        try:
+            while new := self._connection_queue.get_nowait():
+                print('got new connection')
+                self._connections.append(new)
+        except queue.Empty:
+            pass
+
+class Client(ThreadScope):
+    TIMEOUT = 0.1
+    TIMEOUT_GROWTH = 0.1
+
+    def __init__(self, addr: tuple[str, int], close_event: threading.Event, name: str | None = None) -> None:
+        super().__init__(close_event, name)
+        self._addr = addr
+        self._connection: socket.socket
+
+    def _enter(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        attempts = 0
+        accumulated = 0.0
+        while True:
+            duration = min(10.0, Client.TIMEOUT + attempts * Client.TIMEOUT)
+            try:
+                s.settimeout(duration)
+                s.connect(self._addr)
+            except TimeoutError:
+                accumulated += duration
+                attempts += 1
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                print(f"Failed to connect after {duration:g}s (accumulated {accumulated:g}s) trying again.")
+            except OSError as e:
+                print(f"Failed to connect with {e}. Exiting")
+                self._close_event.set()
+                break
+            else:
+                print(f"found connection <{s.getpeername()}>")
+                break
+        self._connection = s
+
+def host():
+    addr = get_private_ipv4()
+    socket = 10000
+
+    conn_queue = Queue()
+    close = threading.Event()
+
+    lighthouse = Lighthouse((addr, socket), conn_queue, close)
+    facilitator = Facilitator(conn_queue, close)
+
+    lighthouse.start()
+    facilitator.start()
+
+    facilitator.watch()
+
+def join():
+    addr = get_private_ipv4()
+    socket = 10000
+
+    close = threading.Event()
+
+    client = Client((addr, socket), close)
+    client.start()
+
+    client.watch()
+
+if __name__ == "__main__":
+    host()
