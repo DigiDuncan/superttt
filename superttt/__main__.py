@@ -10,7 +10,9 @@ def main():
     logging.setup()
 
     # Load debug font
-    load_font("resources/generic/gohu.ttf")
+    fonts = ["gohu.ttf", "Static Bold Italic.otf", "Static Bold.otf", "Static Italic.otf", "Static.otf"]
+    for font in fonts:
+        load_font(f"resources/generic/{font}")
 
     win = Window(title="Multi-Layer Tic-Tac-Toe")
     nav.setup(StartView(), win)
