@@ -8,19 +8,6 @@ from arcade.window_commands import get_window
 V = """
 #version 330
 
-in vec2 in_vert;
-
-void main() {
-    gl_Position = vec4(in_vert, 0.0, 1.0);
-}
-"""
-
-G = """
-#version 330
-
-layout (points) in;
-layout (triangle_strip, max_vertices = 4) out;
-
 uniform WindowBlock {
     mat4 projection;
     mat4 view;
@@ -29,42 +16,23 @@ uniform WindowBlock {
 // [w, h, tilt]
 uniform vec3 shape;
 
-out vec2 gs_uv;
+in vec2 in_vert;
+in vec2 in_instance_pos;
+
+out vec2 vs_uv;
 
 void main() {
-    // Get center of the circle
-    vec2 center = gl_in[0].gl_Position.xy;
-
-    // Calculate rotation/tilt
     float angle = radians(shape.z);
     mat2 rot = mat2(
         cos(angle), -sin(angle),
         sin(angle),  cos(angle)
     );
-    vec2 size = shape.xy / 2.0;
-
-    // Emit quad as triangle strip
-    vec2 p1 = rot * vec2(-size.x,  size.y);
-    vec2 p2 = rot * vec2(-size.x, -size.y);
-    vec2 p3 = rot * vec2( size.x,  size.y);
-    vec2 p4 = rot * vec2( size.x, -size.y);
-
-    gl_Position = window.projection * window.view * vec4(p1 + center, 0.0, 1.0);
-    gs_uv = vec2(0.0, 1.0);
-    EmitVertex();
-    gl_Position = window.projection * window.view * vec4(p2 + center, 0.0, 1.0);
-    gs_uv = vec2(0.0, 0.0); 
-    EmitVertex();
-    gl_Position = window.projection * window.view * vec4(p3 + center, 0.0, 1.0);
-    gs_uv = vec2(1.0, 1.0);
-    EmitVertex();
-    gl_Position = window.projection * window.view * vec4(p4 + center, 0.0, 1.0);
-    gs_uv = vec2(1.0, 0.0);
-    EmitVertex();
-
-    EndPrimitive();
+    // vec2 size = shape.xy / 2.0;
+    mat4 mvp = window.projection * window.view;
+    vec2 pos = in_instance_pos + (rot * (in_vert * shape.xy));
+    gl_Position = mvp * vec4(pos, 0.0, 1.0);
+    vs_uv = in_vert + 0.5;
 }
-
 """
 
 F = """
@@ -72,7 +40,7 @@ F = """
 uniform vec4 colora;
 uniform vec4 colorb;
 
-in vec2 gs_uv;
+in vec2 vs_uv;
 
 out vec4 fs_color;
 
@@ -91,7 +59,7 @@ float cbrt( float x )
     	float y3 = y * y * y;
         y *= ( y3 + 2. * x ) / ( 2. * y3 + x );
     }
-    
+
     return y;
 }
 
@@ -106,7 +74,7 @@ float linearToGamma(float c){
 
 vec3 rgbToOklab(vec3 c) {
   // This is my undersanding: JavaScript canvas and many other virtual and literal devices use gamma-corrected (non-linear lightness) RGB, or sRGB. To convert sRGB values for manipulation in the Oklab color space, you must first convert them to linear RGB. Where Oklab interfaces with RGB it expects and returns linear RGB values. This next step converts (via a function) sRGB to linear RGB for Oklab to use:
-  float r = gammaToLinear(c.r); 
+  float r = gammaToLinear(c.r);
   float g = gammaToLinear(c.g);
   float b = gammaToLinear(c.b);
   // This is the Oklab math:
@@ -144,7 +112,7 @@ void main() {
     vec4 a = vec4(rgbToOklab(colora.rgb), colora.a);
     vec4 b = vec4(rgbToOklab(colorb.rgb), colorb.a);
 
-    vec4 m = mix(b, a, gs_uv.y);
+    vec4 m = mix(b, a, vs_uv.y);
     fs_color = vec4(oklabToSRGB(m.rgb), m.a);
 }
 """
@@ -168,8 +136,7 @@ def draw_rect_gradient(
     # Fail if we don't have a window, context, or right GL abstractions
     window = get_window()
     ctx = window.ctx
-    program = ctx.shape_rectangle_filled_unbuffered_program  # type: ignore
-    program = ctx.program(vertex_shader=V, geometry_shader=G, fragment_shader=F)
+    program = ctx.program(vertex_shader=V, fragment_shader=F)
     geometry = ctx.shape_rectangle_filled_unbuffered_geometry
     buffer = ctx.shape_rectangle_filled_unbuffered_buffer  # type: ignore
 
@@ -182,6 +149,6 @@ def draw_rect_gradient(
     buffer.orphan()
     buffer.write(data=array.array("f", (rect.x, rect.y)))
 
-    geometry.render(program, mode=ctx.POINTS, vertices=1)
+    geometry.render(program, instances=1)
 
     ctx.disable(ctx.BLEND)
