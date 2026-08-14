@@ -12,7 +12,7 @@ def main():
     # Load debug font
     fonts = ["gohu.ttf", "Static Bold Italic.otf", "Static Bold.otf", "Static Italic.otf", "Static.otf"]
     for font in fonts:
-        load_font(f"resources/generic/{font}")
+        load_font(f"resources/superttt/{font}")
 
     win = Window(title="Multi-Layer Tic-Tac-Toe")
     nav.setup(StartView(), win)
