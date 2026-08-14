@@ -14,6 +14,8 @@ from .context import nav
 from superttt.lib.gradient import draw_rect_gradient
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
+GRADIENT = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
+DARK_GRADIENT = (arcade.color.DARK_CYAN, arcade.color.BLACK)
 
 class SuperTTTView(View):
     def __init__(self, grid_size: int = 3, depth: int = 2):
@@ -122,6 +124,7 @@ class SuperTTTView(View):
 
     def on_draw(self) -> bool | None:
         self.clear()
+        draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
         with self.camera.activate():
             draw_board(self.game, self.game_rect)
 
@@ -144,8 +147,6 @@ class StartView(View):
     def __init__(self) -> None:
         super().__init__()
         self.spritelist = SpriteList()
-
-        self.gradient = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
 
         self.logo = Sprite("./resources/superttt/logo.png")
         self.logo.center_x = self.center_x
@@ -193,7 +194,7 @@ class StartView(View):
 
     def on_draw(self) -> bool | None:
         self.clear()
-        draw_rect_gradient(self.window.rect, self.gradient[0], self.gradient[1])
+        draw_rect_gradient(self.window.rect, GRADIENT[0], GRADIENT[1])
         self.spritelist.draw()
         self.splash_text.draw()
 
@@ -317,6 +318,7 @@ class SettingsView(View):
 
     def on_draw(self) -> bool | None:
         self.clear()
+        draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
         self.spritelist.draw()
         self.text_batch.draw()
         if self.hovering_caution:
@@ -367,4 +369,5 @@ class ModeView(View):
 
     def on_draw(self) -> bool | None:
         self.clear()
+        draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
         self.spritelist.draw()

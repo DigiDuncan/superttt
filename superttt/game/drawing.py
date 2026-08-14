@@ -1,3 +1,5 @@
+from functools import cache
+
 import arcade
 
 from .board import Board, Tile, State
@@ -19,6 +21,7 @@ DEPTH_COLORS = {
     4: arcade.color.PINK
 }
 
+@cache
 def split_rect(rect: Rect, grid_size: int) -> list[Rect]:
     new_rect_size = rect.scale(1 / grid_size).size
     start_x, start_y = rect.bottom_left
