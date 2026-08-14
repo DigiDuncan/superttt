@@ -1,6 +1,6 @@
 from arcade import load_font
 
-from superttt.main import StartView
+from superttt.views import StartView
 from .context import nav
 from .window import Window
 from .lib import logging

@@ -1,6 +1,5 @@
 from arcade import View, Window, get_window
 
-# TODO: pop(n: int)
 # TODO pop_until(t: Type[View])
 
 class NavigationStack:
@@ -21,8 +20,9 @@ class NavigationStack:
         self._stack.append(view)
         self._window.show_view(view)
 
-    def pop(self) -> View:
-        view = self._stack.pop()
+    def pop(self, n: int = 1) -> View:
+        for _ in range(n):
+            view = self._stack.pop()
         self._window.show_view(self.peek())
         return view
 
@@ -42,3 +42,7 @@ class NavigationStack:
             return
         self._stack[-1] = view
         self._window.show_view(view)
+
+    def pop_to_start(self) -> None:
+        while len(self._stack) > 1:
+            self.pop()

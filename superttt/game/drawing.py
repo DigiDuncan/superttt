@@ -37,9 +37,9 @@ def draw_board(board: Board, rect: Rect):
         logger.warning(f"Rect not a square! {rect.width}x{rect.height}")
 
     splits = split_rect(rect, board.size)
-    bg_rect = rect.scale(0.95)
 
     if board.type == Tile:
+        bg_rect = rect.scale(0.95)
         draw_rect_filled(bg_rect, Color.from_gray(50))
 
         for n, split in enumerate(splits):
@@ -50,7 +50,6 @@ def draw_board(board: Board, rect: Rect):
                 draw_texture_rect(TEXTURES["x"], split) if board.state == State.X else draw_texture_rect(TEXTURES["x_gray"], split)
             elif tile.state == State.O:
                 draw_texture_rect(TEXTURES["o"], split) if board.state == State.O else draw_texture_rect(TEXTURES["o_gray"], split)
-
     else:
         bg_rect = rect.scale(1)
         draw_rect_outline(bg_rect, arcade.color.WHITE)
