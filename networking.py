@@ -3,13 +3,50 @@ from __future__ import annotations
 import json
 import socket
 import threading
+import urllib.request
 from dataclasses import asdict, dataclass
 from queue import Queue
+from string import ascii_uppercase
 from time import time_ns
 from typing import ClassVar, Self
 
 from arcade import View, Window
 
+ROOM_CHR = ascii_uppercase
+ROOM_MAP = {s: idx for idx, s in enumerate(ROOM_CHR)}
+def int_to_base(x: int, base: str = ROOM_CHR):
+    n, m = divmod(x, len(base))
+    s = base[m]
+    while 0 < n:
+        n, m = divmod(n, len(base))
+        s = base[m] + s
+    return s
+
+def base_to_int(s: str, base: dict[str, int] = ROOM_MAP):
+    x = 0
+    size = len(base)
+    for char in s:
+        x = x * size + base[char]
+    return x
+
+def get_roomcode(addr: str, port: int, mapping: str = ROOM_CHR) -> str:
+    (a1, a2, a3, a4) = (max(0, min(0xFE, int(a))) for a in addr.split('.'))
+    n = (a1 << 40) + (a2 << 32) + (a3 << 24) + (a4 << 16) + max(0, min(0xFFFE, port))
+    print(n)
+    return int_to_base(n, mapping)
+
+def get_addr(room: str, mapping: dict[str, int]) -> tuple[str, int]:
+    n = base_to_int(room, mapping).to_bytes(6, signed=False)
+    (a1, a2, a3, a4) = n[0:4] # automatically converts to 8-bit unsigned int
+    return f"{a1}.{a2}.{a3}.{a4}", int.from_bytes(n[4:6], "big")
+
+
+def get_private_ipv4() -> str:
+    return socket.gethostbyname(socket.gethostname())
+
+
+def get_public_ipv4() -> str:
+    return urllib.request.urlopen("https://api.ipify.org").read().decode('utf8')
 
 def ms_since_epoch() -> int:
     return time_ns() // 1_000_000
@@ -79,6 +116,7 @@ class ThreadScope:
 @dataclass
 class Message:
     subcls_mapping: ClassVar[dict[str, type[Message]]] = {}
+    sender: str
 
     def __init_subclass__(cls) -> None:
         if cls.__name__ in Message.subcls_mapping:
@@ -126,7 +164,7 @@ def wrap(message: Message, time: int) -> bytes:
     head_size = 16 + name_size
     msg_size = head_size + body_size + tail_size
 
-    header = f"\x01{msg_size:0>4}\x01{name_size:0>2}".encode() + name + time_data
+    header = f"\x01{msg_size:0>4X}\x01{name_size:0>2X}".encode() + name + time_data
     body = b'\x02'+data
     tail = b'\x04'
 
@@ -140,10 +178,10 @@ def unwrap(data: bytes) -> tuple[Message, int] | None:
     """
     # TODO: actual validation
     recv_size = len(data)
-    msg_size = int(data[1:5])
+    msg_size = int(data[1:5], base=16)
     if recv_size != msg_size:
         print("The received data does not match the messages claimed size")
-    name_size = int(data[6:8])
+    name_size = int(data[6:8], base=16)
     name = data[8:8+name_size].decode('utf-8')
     time = int.from_bytes(data[8+name_size:16+name_size], "little", signed=False)
 
@@ -170,7 +208,7 @@ class Lighthouse(ThreadScope):
     Holds the host's `lighthouse` server until told to stop.
     Can be told to stop before the clients have closed their connecctions.
     Just makes connections and pipes them through the provided connections Queue.
-    Won't create socket
+    Won't create socket until the thread has been started.
     """
     TIMEOUT = 0.5
 
@@ -191,7 +229,7 @@ class Lighthouse(ThreadScope):
 
     def _run(self):
         try:
-            self._connection.settimeout(HostConnection.TIMEOUT)
+            self._connection.settimeout(Lighthouse.TIMEOUT)
             (connection, _) = self._connection.accept()
         except TimeoutError:
             pass # TODO: track accumulated? reset on connection?
@@ -202,8 +240,15 @@ class Lighthouse(ThreadScope):
     def _exit(self):
         self._connection.close()
 
-class Node(ThreadScope):
-    pass
+
+class Facilitator(ThreadScope):
+    """
+    The facilitator holds all of the connections and relays messages between clients.
+    It uses non-blocking connections to handle an arbitrary number of clients.
+    """
+    def __init__(self, conn_queue: Queue[socket.socket], close_event: threading.Event, name: str | None = None) -> None:
+        super().__init__(close_event, name)
+        self._connection = conn_queue
 
 class Client:
     pass
