@@ -85,3 +85,13 @@ def get_rect_from_coordinate(coord: tuple[int, ...], rect: Rect, grid_size: int)
         splits = split_rect(current_rect, grid_size)
         current_rect = splits[i]
     return current_rect
+
+def lerp_rect(rect_a: Rect, rect_b: Rect, t: float) -> Rect:
+    sub_t = (1 - t)
+    return Rect(*(sub_t * a + t * b for a, b in zip(rect_a, rect_b)))
+
+def clamp(mi, ma, x):
+    return max(mi, min(ma, x))
+
+def ease_rect(rect_a: Rect, rect_b: Rect, start: float, end: float, t: float) -> Rect:
+    return(lerp_rect(rect_a, rect_b, clamp(0, 1, ((t - start) / (end - start)))))
