@@ -1,5 +1,7 @@
 from arcade import View, Window, get_window
 
+# TODO: pop(n: int)
+# TODO pop_until(t: Type[View])
 
 class NavigationStack:
     def __init__(self) -> None:

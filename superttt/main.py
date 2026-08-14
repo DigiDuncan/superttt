@@ -127,6 +127,8 @@ class SuperTTTView(View):
                 self.hover_id = tile.id
             else:
                 self.hover_id = None
+        else:
+            self.hover_id = None
 
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.R:
@@ -375,12 +377,14 @@ class ModeView(View):
         self.local.scale = 0.5
         self.local.center_x = self.center_x
         self.local.center_y = self.center_y
+        self.local.color = arcade.color.GRAY
         self.spritelist.append(self.local)
 
         self.online = Sprite("./resources/superttt/online.png")
         self.online.scale = 0.5
         self.online.center_x = self.center_x
         self.online.center_y = self.height * 0.25
+        self.online.color = arcade.color.GRAY
         self.spritelist.append(self.online)
 
         self.back = Sprite("./resources/superttt/back.png")
@@ -390,7 +394,7 @@ class ModeView(View):
         self.spritelist.append(self.back)
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
-        for button in [self.couch, self.local, self.online, self.back]:
+        for button in [self.couch, self.back]:
             if (x, y) in button.rect:
                 button.color = arcade.color.CYAN
             else:
