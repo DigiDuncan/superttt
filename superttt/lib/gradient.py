@@ -44,76 +44,74 @@ in vec2 vs_uv;
 
 out vec4 fs_color;
 
-#define NEWTON_ITER 1
-#define HALLEY_ITER 1
+//////////////////////////////////////////////////////////////////////
+// sRGB color transform and inverse from
+// https://bottosson.github.io/posts/colorwrong/#what-can-we-do%3F
 
-float cbrt( float x )
-{
-	float y = sign(x) * uintBitsToFloat( floatBitsToUint( abs(x) ) / 3u + 0x2a514067u );
+vec3 srgb_from_linear_srgb(vec3 x) {
 
-	for( int i = 0; i < NEWTON_ITER; ++i )
-    	y = ( 2. * y + x / ( y * y ) ) * .333333333;
+    vec3 xlo = 12.92*x;
+    vec3 xhi = 1.055 * pow(x, vec3(0.4166666666666667)) - 0.055;
 
-    for( int i = 0; i < HALLEY_ITER; ++i )
-    {
-    	float y3 = y * y * y;
-        y *= ( y3 + 2. * x ) / ( 2. * y3 + x );
-    }
+    return mix(xlo, xhi, step(vec3(0.0031308), x));
 
-    return y;
 }
 
-float gammaToLinear(float c){
-  return c >= 0.04045 ? pow((c + 0.055) / 1.055, 2.4) : c / 12.92;
+vec3 linear_srgb_from_srgb(vec3 x) {
+
+    vec3 xlo = x / 12.92;
+    vec3 xhi = pow((x + 0.055)/(1.055), vec3(2.4));
+
+    return mix(xlo, xhi, step(vec3(0.04045), x));
+
 }
 
-// correlary of the first " : "..then switching back" :
-float linearToGamma(float c){
-  return c >= 0.0031308 ? 1.055 * pow(c, 1 / 2.4) - 0.055 : 12.92 * c;
+//////////////////////////////////////////////////////////////////////
+// oklab transform and inverse from
+// https://bottosson.github.io/posts/oklab/
+
+
+const mat3 fwdA = mat3(1.0, 1.0, 1.0,
+                       0.3963377774, -0.1055613458, -0.0894841775,
+                       0.2158037573, -0.0638541728, -1.2914855480);
+
+const mat3 fwdB = mat3(4.0767245293, -1.2681437731, -0.0041119885,
+                       -3.3072168827, 2.6093323231, -0.7034763098,
+                       0.2307590544, -0.3411344290,  1.7068625689);
+
+const mat3 invB = mat3(0.4121656120, 0.2118591070, 0.0883097947,
+                       0.5362752080, 0.6807189584, 0.2818474174,
+                       0.0514575653, 0.1074065790, 0.6302613616);
+
+const mat3 invA = mat3(0.2104542553, 1.9779984951, 0.0259040371,
+                       0.7936177850, -2.4285922050, 0.7827717662,
+                       -0.0040720468, 0.4505937099, -0.8086757660);
+
+vec3 oklab_from_linear_srgb(vec3 c) {
+
+    vec3 lms = invB * c;
+
+    return invA * (sign(lms)*pow(abs(lms), vec3(0.3333333333333)));
+
 }
 
-vec3 rgbToOklab(vec3 c) {
-  // This is my undersanding: JavaScript canvas and many other virtual and literal devices use gamma-corrected (non-linear lightness) RGB, or sRGB. To convert sRGB values for manipulation in the Oklab color space, you must first convert them to linear RGB. Where Oklab interfaces with RGB it expects and returns linear RGB values. This next step converts (via a function) sRGB to linear RGB for Oklab to use:
-  float r = gammaToLinear(c.r);
-  float g = gammaToLinear(c.g);
-  float b = gammaToLinear(c.b);
-  // This is the Oklab math:
-  float l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b;
-  float m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b;
-  float s = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+vec3 linear_srgb_from_oklab(vec3 c) {
 
-  l = cbrt(l); m = cbrt(m); s = cbrt(s);
-  return vec3(
-    l * +0.2104542553 + m * +0.7936177850 + s * -0.0040720468,
-    l * +1.9779984951 + m * -2.4285922050 + s * +0.4505937099,
-    l * +0.0259040371 + m * +0.7827717662 + s * -0.8086757660
-  );
+    vec3 lms = fwdA * c;
+
+    return fwdB * (lms * lms * lms);
+
 }
 
-vec3 oklabToSRGB(vec3 c) {
-  float l = c.r + c.g * +0.3963377774 + c.b * +0.2158037573;
-  float m = c.r + c.g * -0.1055613458 + c.b * -0.0638541728;
-  float s = c.r + c.g * -0.0894841775 + c.b * -1.2914855480;
-  // The ** operator here cubes; same as l_*l_*l_ in the C++ example:
-  l = pow(l, 3.0); m = pow(m, 3.0); s = pow(s, 3.0);
-  float r = l * +4.0767416621 + m * -3.3077115913 + s * +0.2309699292;
-  float g = l * -1.2684380046 + m * +2.6097574011 + s * -0.3413193965;
-  float b = l * -0.0041960863 + m * -0.7034186147 + s * +1.7076147010;
-  // Convert linear RGB values returned from oklab math to sRGB for our use before returning them:
-  r = linearToGamma(r); g = linearToGamma(g); b = linearToGamma(b);
-  // OPTION: clamp r g and b values to the range 0-255; but if you use the values immediately to draw, JavaScript clamps them on use:
-  r = clamp(r, 0.0, 1.0); g = clamp(g, 0.0, 1.0); b = clamp(b, 0.0, 1.0);
-  return vec3(r, g, b);
-}
-
+//////////////////////////////////////////////////////////////////////
 
 
 void main() {
-    vec4 a = vec4(rgbToOklab(colora.rgb), colora.a);
-    vec4 b = vec4(rgbToOklab(colorb.rgb), colorb.a);
+    vec4 a = vec4(oklab_from_linear_srgb(linear_srgb_from_srgb(colora.rgb)), colora.a);
+    vec4 b = vec4(oklab_from_linear_srgb(linear_srgb_from_srgb(colorb.rgb)), colorb.a);
 
     vec4 m = mix(b, a, vs_uv.y);
-    fs_color = vec4(oklabToSRGB(m.rgb), m.a);
+    fs_color = vec4(srgb_from_linear_srgb(linear_srgb_from_oklab(m.rgb)), m.a);
 }
 """
 

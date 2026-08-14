@@ -311,7 +311,7 @@ class SettingsView(View):
             text.hovered = (x, y) in text.rect
 
         self.update_text_colors()
-    
+
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.BACKSPACE:
             nav.pop()
