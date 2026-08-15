@@ -6,8 +6,8 @@ import arcade.key
 
 from superttt.game import board
 from superttt.game.board import State, Tile
-from superttt.game.drawing import draw_board, ease, ease_rect, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
-from superttt.lib.utils import format_time
+from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
+from superttt.lib.utils import format_time, ease_rect, ease
 from .context import nav
 from superttt.lib.gradient import draw_rect_gradient
 
