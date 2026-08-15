@@ -69,8 +69,8 @@ class GameView(View):
         )
         self.timer_shadow = Text(
                     "0:00",
-                    12,
-                    self.height - 12,
+                    11,
+                    self.height - 11,
                     font_size=24,
                     anchor_y="top",
                     font_name="Static",
@@ -161,7 +161,7 @@ class GameView(View):
         if self.debug:
             self.debug_text.draw()
 
-        if self.depth != 1 and self.latest_tile and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
+        if self.depth != 1 and self.latest_tile and self.next_moves and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
             with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
                 latest_tile_rect = get_rect_from_coordinate(self.latest_tile.id, self.game_rect, self.grid_size)
                 new_move_rects = []
