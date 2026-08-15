@@ -6,14 +6,14 @@ import arcade.key
 
 from superttt.game import board
 from superttt.game.board import State, Tile
-from superttt.game.drawing import draw_board, ease_rect, get_tile_from_position, TEXTURES, get_rect_from_coordinate
+from superttt.game.drawing import draw_board, ease, ease_rect, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
 from superttt.lib.utils import format_time
 from .context import nav
 from superttt.lib.gradient import draw_rect_gradient
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
 GRADIENT = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
-DARK_GRADIENT = (arcade.color.DARK_CYAN, arcade.color.BLACK)
+DARK_GRADIENT = (arcade.types.Color(0, 64, 64), arcade.color.BLACK)
 MOVE_TIME = 0.5
 
 class GameView(View):
@@ -161,8 +161,8 @@ class GameView(View):
         if self.debug:
             self.debug_text.draw()
 
-        with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
-            if self.latest_tile and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
+        if self.depth != 1 and self.latest_tile and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
+            with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
                 latest_tile_rect = get_rect_from_coordinate(self.latest_tile.id, self.game_rect, self.grid_size)
                 new_move_rects = []
                 for move in self.next_moves:
@@ -172,6 +172,16 @@ class GameView(View):
                     draw_rect_filled(draw_rect, (0, 255, 0, 128))
                 outline = reduce(or_, new_move_rects)
                 draw_rect_outline(outline, arcade.color.GREEN, 3)
+            grid_alpha = 255 if self.time_elapsed <= self.last_move_time + MOVE_TIME else int(ease(255, 0, self.last_move_time + MOVE_TIME, self.last_move_time + MOVE_TIME + MOVE_TIME, self.time_elapsed))
+            super_board_id = self.latest_tile.id[:-1]
+            super_board = get_rect_from_coordinate(super_board_id, self.game_rect, self.grid_size)
+            super_super_board_id = super_board_id[1:]
+            super_super_board = get_rect_from_coordinate(super_super_board_id, self.game_rect, self.grid_size)
+            draw_rect = ease_rect(super_board, super_super_board, self.last_move_time, self.last_move_time + MOVE_TIME, self.time_elapsed)
+            super_super_splits = split_rect(draw_rect, self.grid_size)
+            with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
+                for sss in super_super_splits:
+                    draw_rect_outline(sss, arcade.color.GREEN.replace(a = grid_alpha), 1)
 
         self.timer_shadow.draw()
         self.timer_text.draw()

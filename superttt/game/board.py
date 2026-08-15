@@ -82,7 +82,7 @@ class Board:
 
         if not isinstance(tile, Tile):
             raise TypeError("Can't set state of a Board directly!")
-        
+
         tile.state = state
 
     def get_next_board_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> Board:
@@ -116,7 +116,7 @@ class Board:
 
         if board.state != State.NONE:  # Wild
             return [t.id for t in flatten(self.get_all_none_state_tiles())]
-    
+
         return [t.id for t in board.items if t.state == State.NONE]  # type: ignore -- This should be a Board, I hope!!
 
     @classmethod

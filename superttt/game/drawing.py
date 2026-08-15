@@ -68,7 +68,7 @@ def draw_board(board: Board, rect: Rect):
 
 def get_tile_from_position(point: Point2, board: Board, rect: Rect) -> Tile | None:
     splits = split_rect(rect, board.size)
-    
+
     if board.type == Tile:
         for n, split in enumerate(splits):
             if point in split:
@@ -89,8 +89,15 @@ def lerp_rect(rect_a: Rect, rect_b: Rect, t: float) -> Rect:
     sub_t = (1 - t)
     return Rect(*(sub_t * a + t * b for a, b in zip(rect_a, rect_b)))
 
+def lerp(a: float, b: float, t: float) -> float:
+    sub_t = (1 - t)
+    return (sub_t * a + t * b)
+
 def clamp(mi, ma, x):
     return max(mi, min(ma, x))
 
 def ease_rect(rect_a: Rect, rect_b: Rect, start: float, end: float, t: float) -> Rect:
     return(lerp_rect(rect_a, rect_b, clamp(0, 1, ((t - start) / (end - start)))))
+
+def ease(a: float, b: float, start: float, end: float, t: float) -> float:
+    return(lerp(a, b, clamp(0, 1, ((t - start) / (end - start)))))
