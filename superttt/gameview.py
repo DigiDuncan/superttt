@@ -8,7 +8,7 @@ from superttt.game import board
 from superttt.game.board import State, Tile
 from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
 from superttt.game.game import Game
-from superttt.lib.utils import format_time, ease_rect, ease
+from superttt.lib.utils import ease_color, format_time, ease_rect, ease
 from .context import nav
 from superttt.lib.gradient import draw_rect_gradient
 
@@ -31,7 +31,8 @@ class GameView(View):
         self.draw_game = Game(self.game, self.game_rect)
 
         self.current_turn: State = State.X
-        self.current_turn_rect = LBWH(10, 10, 100, 100)
+        n = self.window.rect.top - self.game_rect.top
+        self.current_turn_rect = LBWH(self.game_rect.right - n, self.game_rect.top, n, n)
 
         self.latest_tile: Tile | None = None
         self.next_moves: list[tuple[int, ...]] = self.game.get_valid_moves_from_latest_move(None)
@@ -49,32 +50,34 @@ class GameView(View):
         self.paused_sprite.visible = False
 
         self.quit = Sprite("./resources/superttt/quit.png")
-        self.quit.scale = 0.5
+        self.quit.scale = 0.33333
         self.quit.bottom = 10
         self.quit.right = self.width - 10
         self.spritelist.append(self.quit)
 
         self.turn_label = Sprite("./resources/superttt/turn.png")
-        self.turn_label.scale = 0.333
-        self.turn_label.bottom = self.current_turn_rect.top + 10
-        self.turn_label.center_x = self.current_turn_rect.center_x
+        ar = self.turn_label.rect.aspect_ratio
+        self.turn_label.height = n - 10
+        self.turn_label.width = (n - 10) * ar
+        self.turn_label.bottom = self.game_rect.top + 5
+        self.turn_label.right = self.current_turn_rect.left - 5
         self.spritelist.append(self.turn_label)
 
         self.timer_text = Text(
             "0:00",
-            10,
-            self.height - 10,
-            font_size=24,
-            anchor_y="top",
+            self.game_rect.left,
+            self.game_rect.top,
+            font_size=20,
+            anchor_y="bottom",
             font_name="Static",
             color = arcade.color.RED
         )
         self.timer_shadow = Text(
                     "0:00",
-                    11,
-                    self.height - 11,
-                    font_size=24,
-                    anchor_y="top",
+                    self.game_rect.left + 1,
+                    self.game_rect.top - 1,
+                    font_size=20,
+                    anchor_y="bottom",
                     font_name="Static",
                     color = arcade.color.WHITE
         )
@@ -168,6 +171,10 @@ class GameView(View):
 
         # "The move rule" animation
         if self.depth != 1 and self.latest_tile and self.next_moves and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
+            if self.current_turn == State.X:
+                color = ease_color(arcade.color.RED, arcade.color.CYAN, self.last_move_time, self.last_move_time + MOVE_TIME, self.time_elapsed)
+            else:
+                color = ease_color(arcade.color.CYAN, arcade.color.RED, self.last_move_time, self.last_move_time + MOVE_TIME, self.time_elapsed)
             with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
                 latest_tile_rect = get_rect_from_coordinate(self.latest_tile.id, self.game_rect, self.grid_size)
                 new_move_rects = []
@@ -175,9 +182,9 @@ class GameView(View):
                     new_rect = get_rect_from_coordinate(move, self.game_rect, self.game.size)
                     draw_rect = ease_rect(latest_tile_rect, new_rect, self.last_move_time, self.last_move_time + MOVE_TIME, self.time_elapsed)
                     new_move_rects.append(draw_rect)
-                    draw_rect_filled(draw_rect, (0, 255, 0, 128))
+                    draw_rect_filled(draw_rect, color.replace(a = 127))
                 outline = reduce(or_, new_move_rects)
-                draw_rect_outline(outline, arcade.color.GREEN, 3)
+                draw_rect_outline(outline, color, 3)
             grid_alpha = 255 if self.time_elapsed <= self.last_move_time + MOVE_TIME else int(ease(255, 0, self.last_move_time + MOVE_TIME, self.last_move_time + MOVE_TIME + MOVE_TIME, self.time_elapsed))
             super_board_id = self.latest_tile.id[:-1]
             super_board = get_rect_from_coordinate(super_board_id, self.game_rect, self.grid_size)
@@ -187,7 +194,7 @@ class GameView(View):
             super_super_splits = split_rect(draw_rect, self.grid_size)
             with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
                 for sss in super_super_splits:
-                    draw_rect_outline(sss, arcade.color.GREEN.replace(a = grid_alpha), 1)
+                    draw_rect_outline(sss, color.replace(a = grid_alpha), 1)
 
         self.timer_shadow.draw()
         self.timer_text.draw()

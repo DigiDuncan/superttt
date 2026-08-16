@@ -1,4 +1,5 @@
 from arcade import Rect
+from arcade.types import Color
 
 
 def flatten(lst):
@@ -38,6 +39,13 @@ def clamp(mi, ma, x):
 
 def ease_rect(rect_a: Rect, rect_b: Rect, start: float, end: float, t: float) -> Rect:
     return(lerp_rect(rect_a, rect_b, clamp(0, 1, ((t - start) / (end - start)))))
+
+def ease_color(color_a: Color, color_b: Color, start: float, end: float, t: float) -> Color:
+    r = int(ease(color_a.r, color_b.r, start, end, t))
+    g = int(ease(color_a.g, color_b.g, start, end, t))
+    b = int(ease(color_a.b, color_b.b, start, end, t))
+    a = int(ease(color_a.a, color_b.a, start, end, t))
+    return Color(r, g, b, a)
 
 def ease(a: float, b: float, start: float, end: float, t: float) -> float:
     return(lerp(a, b, clamp(0, 1, ((t - start) / (end - start)))))
