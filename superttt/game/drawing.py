@@ -38,33 +38,20 @@ def draw_board(board: Board, rect: Rect):
 
     splits = split_rect(rect, board.size)
 
-    if board.type == Tile:
-        bg_rect = rect.scale(0.95)
-        draw_rect_filled(bg_rect, Color.from_gray(50))
-
-        for n, split in enumerate(splits):
-            tile = board.items[n]
-            if tile.state == State.NONE:
-                draw_texture_rect(TEXTURES["empty"], split)
-            elif tile.state == State.X:
-                draw_texture_rect(TEXTURES["x"], split) if board.state == State.X else draw_texture_rect(TEXTURES["x_gray"], split)
-            elif tile.state == State.O:
-                draw_texture_rect(TEXTURES["o"], split) if board.state == State.O else draw_texture_rect(TEXTURES["o_gray"], split)
-    else:
-        bg_rect = rect.scale(1)
-        draw_rect_outline(bg_rect, arcade.color.WHITE)
+    if board.type == Board:
+        draw_rect_outline(rect, arcade.color.WHITE)
         for n, split in enumerate(splits):
             draw_board(board.items[n], split) # type: ignore -- it's always a Board at this point
 
     if board.state != State.NONE:
-        draw_rect_filled(bg_rect, (0, 0, 0, 200))
+        draw_rect_filled(rect, (0, 0, 0, 200))
         if board.state == State.X:
-            draw_texture_rect(TEXTURES["x"], bg_rect, alpha = 128)
+            draw_texture_rect(TEXTURES["x"], rect, alpha = 128)
         elif board.state == State.O:
-            draw_texture_rect(TEXTURES["o"], bg_rect, alpha = 128)
+            draw_texture_rect(TEXTURES["o"], rect, alpha = 128)
 
     if board.stalemate:
-        draw_texture_rect(TEXTURES["stalemate"], bg_rect, alpha = 128)
+        draw_texture_rect(TEXTURES["stalemate"], rect, alpha = 128)
 
 def get_tile_from_position(point: Point2, board: Board, rect: Rect) -> Tile | None:
     splits = split_rect(rect, board.size)

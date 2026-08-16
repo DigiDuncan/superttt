@@ -7,6 +7,7 @@ import arcade.key
 from superttt.game import board
 from superttt.game.board import State, Tile
 from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
+from superttt.game.game import Game
 from superttt.lib.utils import format_time, ease_rect, ease
 from .context import nav
 from superttt.lib.gradient import draw_rect_gradient
@@ -27,6 +28,7 @@ class GameView(View):
 
         self.game = board.create_board(self.grid_size, self.depth)
         self.game_rect = XYWH(*self.center, self.height * 0.9, self.height * 0.9)
+        self.draw_game = Game(self.game, self.game_rect)
 
         self.current_turn: State = State.X
         self.current_turn_rect = LBWH(10, 10, 100, 100)
@@ -114,6 +116,8 @@ class GameView(View):
         if (x, y) in self.quit.rect:
             nav.pop_to_start()
 
+        self.draw_game.update_state()
+
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
         tile = get_tile_from_position((x, y), self.game, self.game_rect)
         if self.debug:
@@ -151,6 +155,7 @@ class GameView(View):
         self.clear()
         draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
         with self.camera.activate():
+            self.draw_game.spritelist.draw()
             draw_board(self.game, self.game_rect)
 
         if self.current_turn == State.X:
@@ -161,6 +166,7 @@ class GameView(View):
         if self.debug:
             self.debug_text.draw()
 
+        # "The move rule" animation
         if self.depth != 1 and self.latest_tile and self.next_moves and self.game.get_next_board_from_latest_move(self.latest_tile.id).state == State.NONE:
             with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
                 latest_tile_rect = get_rect_from_coordinate(self.latest_tile.id, self.game_rect, self.grid_size)

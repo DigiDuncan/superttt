@@ -14,15 +14,15 @@ class State(StrEnum):
 type Data = tuple[str | Data, ...]
 
 class Tile:
-    def __init__(self, state: State | None = None, id: tuple[int, ...] = None) -> None: # type: ignore
+    def __init__(self, state: State | None = None, id: tuple[int, ...] | None = None) -> None:
         self.state: State = state if state else State.NONE
-        self.id: tuple[int, ...] = id
+        self.id: tuple[int, ...] = id  # type: ignore -- it's not going to be None for long don't worry about it
 
     def __str__(self) -> str:
         return "X" if self.state == State.X else "O" if self.state == State.O else "#"
 
 class Board:
-    def __init__(self, items: list[Tile | Board] | None = None, id: tuple[int, ...] = None) -> None: # type: ignore
+    def __init__(self, items: list[Tile | Board] | None = None, id: tuple[int, ...] | None = None, parent = None) -> None:
         # Because of Arcade being bottom-up, the layout is:
         # 6 7 8
         # 3 4 5
@@ -32,7 +32,7 @@ class Board:
         # winning combinations for this board size
         self.winning_combos = get_winning_combos(self.size)
 
-        self.id: tuple[int, ...] = id
+        self.id: tuple[int, ...] = id  # type: ignore -- by the time you check the ID it's not None
 
     @property
     def state(self) -> State:
@@ -84,6 +84,12 @@ class Board:
             raise TypeError("Can't set state of a Board directly!")
 
         tile.state = state
+
+    def get_item_from_id(self, id: tuple[int, ...]) -> Tile | Board:
+        item = self
+        for i in id:
+            item = item.items[i]
+        return item
 
     def get_next_board_from_latest_move(self, latest_move_coord: tuple[int, ...]) -> Board:
         valid_next_board = latest_move_coord[1:]
