@@ -2,19 +2,18 @@ from __future__ import annotations
 
 import json
 import queue
+import select
 import socket
 import threading
 import urllib.request
-import sys
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from queue import Queue
 from string import ascii_uppercase
 from time import time_ns
-from typing import ClassVar, Self
+from typing import ClassVar, Literal, Self
 
 from arcade import View, Window
-
-from superttt.lib.gradient import F
 
 ROOM_CHR = ascii_uppercase
 ROOM_MAP = {s: idx for idx, s in enumerate(ROOM_CHR)}
@@ -148,13 +147,20 @@ class Message:
         """
         return cls(**json.loads(data.decode('utf-8')))
 
+SOH = b'\x01'
+STX = b'\x02'
+ETX = b'\x03'
+EOT = b'\x04'
+
+MIN_SIZE = 1 + 4 + 1 + 2 + 8 + 1 + 1
+
 def wrap(message: Message, time: int) -> bytes:
     """
     Message object to wrap and the ms since epoch for syncing.
 
     A wrapped message looks like this
 
-    <SOH> <msg_size:0>4> <SOH> <name_size:0>2> <name> <msg_time:BE> <STX> <data> <EOT>
+    <SOH> <msg_size:0>4> <ETX> <name_size:0>2> <name> <msg_time:BE> <STX> <data> <EOT>
     | ^^^^^^^^^^^^^^^^ | | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ | | ^^^^^^^^ | | ^ |
       Size for Reading     Rest of header for decoding                Data        Tail
       1 + 4 bytes          1 + 2 + N + 8 bytes                        1 + N bytes 1 b
@@ -170,9 +176,9 @@ def wrap(message: Message, time: int) -> bytes:
     head_size = 16 + name_size
     msg_size = head_size + body_size + tail_size
 
-    header = f"\x01{msg_size:0>4X}\x01{name_size:0>2X}".encode() + name + time_data
-    body = b'\x02'+data
-    tail = b'\x04'
+    header = SOH + f"{msg_size:0>4X}".encode() + ETX + f"{name_size:0>2X}".encode() + name + time_data
+    body = STX + data
+    tail = EOT
 
     return header + body + tail
 
@@ -200,6 +206,73 @@ def unwrap(data: bytes) -> tuple[Message, int] | None:
 
     return message, time
 
+def find_wrapped(data: bytes) -> tuple[int, int] | None:
+    """
+    Look through a stream of data and find a wrapped message.
+    If it fails to find a message it returns None.
+    If it finds a message it returns the range (end exclusive like range(a,b)) of the message.
+    if a != 0, find_wrapped doesn't care, but that does indicate a msg fragment.
+
+    We are looking for the specific shape <SOH> FFFF <ETX> ... <EOT>
+    we don't actually care about the rest of the header or the body marker <STX>.
+    If that is illformed the unwrap function handles that.
+    """
+    idx = 0
+    size = len(data)
+    # Since were are looking for a very specific shape we know that it must be MIN_SIZE or more bytes
+    while idx < size - MIN_SIZE:
+        if data[idx:idx+1] == SOH and data[idx+5:idx+6] == ETX:
+            # We know that the data is in the form <SOH> ???? <ETX>
+            try:
+                msg_size = int(data[idx+1:idx+5], base=16)
+            except ValueError:
+                pass # The message size is not a Hexadecimal number so it can't correct
+            else:
+                # We know the data is in the form <SOH> FFFF <ETX> so let's look for <EOT>
+                if data[idx+msg_size-1:idx+msg_size] == EOT:
+                    return idx, idx + msg_size # The shape is all correct we have a message to send.
+        idx += 1 # We haven't found a <SOH>FFF<ETX> ... <EOT> marker so move on.
+        continue
+
+    return None # We reached the end of the data without finding a wrapped msg
+
+def send(socket: socket.socket, data: bytes) -> bool:
+    sent = 0
+    while sent < len(data):
+        out = socket.send(data[sent:])
+        if out == 0:
+            return False # Failed to send msg
+        sent += out
+    return True
+
+def recv(socket: socket.socket) -> Literal[False] | bytes:
+    # TODO: better Validiation, and handle retrieving msg fragments
+    # because if that happens every message from then on will be broken.
+    # It might require a more stateful recv that just eats bytes till there are none left
+    # Once that's true we look for the <SOH> <SOH> <STX> <EOT> marker and extract those messages
+    # Which would also mean that we don't need the message size, but also that can be a good sanity
+    # check.
+    chunks = []
+    rcvd = 0
+    size = 5 # 5 bytes for <SOH> and 0000 - FFFF size string
+    while rcvd < size:
+        chunk = socket.recv(size - rcvd)
+        if chunk == b'':
+            return False # Failed to recv msg
+        rcvd += len(chunk)
+        chunks.append(chunk)
+    header = b''.join(chunks)
+    size = int(header[1:], base=16)
+    while rcvd < size:
+        chunk = socket.recv(min(size - rcvd, 2048))
+        if chunk == b'':
+            return False # Failed to recv msg
+        rcvd += len(chunk)
+        chunks.append(chunk)
+    return b''.join(chunks)
+
+
+
 @dataclass
 class MouseCursorMoved(Message):
     "Mouse Cursor Moved"
@@ -208,6 +281,13 @@ class MouseCursorMoved(Message):
     dx: float
     dy: float
 
+@dataclass
+class TextMessage(Message):
+    text: str
+
+@dataclass
+class AssignNameMessage(Message):
+    name: str
 
 class Lighthouse(ThreadScope):
     """
@@ -254,30 +334,119 @@ class Facilitator(ThreadScope):
     The facilitator holds all of the connections and relays messages between clients.
     It uses non-blocking connections to handle an arbitrary number of clients.
     """
+    SELECT_TIMEOUT = 10.0
+
     def __init__(self, conn_queue: Queue[socket.socket], close_event: threading.Event, name: str | None = None) -> None:
         super().__init__(close_event, name)
         self._connection_queue = conn_queue
+
         self._connections: list[socket.socket] = []
+        self._connection_outgoing: dict[tuple[str, int], bytes] = {}
+        self._connection_incoming: dict[tuple[str, int], bytes] = {}
 
     def _run(self):
         self._meet_new_connections()
 
+        if not self._connections:
+            return
+
+        ready_to_read, ready_to_write, _ = select.select(
+            self._connections,
+            self._connections,
+            (),
+            Facilitator.SELECT_TIMEOUT
+        )
+
+        self.recv_messages(ready_to_read)
+        self.send_messages(ready_to_write)
+
     def _meet_new_connections(self):
         try:
             while new := self._connection_queue.get_nowait():
-                print('got new connection')
+                index = new.getpeername()
+                name = get_roomcode(index[0], index[1])
                 self._connections.append(new)
+                self._connection_incoming[index] = b''
+                self._connection_outgoing[index] = wrap(AssignNameMessage("Facilitator", name), ms_since_epoch())
+                print(f'got new connection {name} <{index}>')
         except queue.Empty:
             pass
+
+    def _close_connection(self, connection: socket.socket, shutdown: bool = True):
+        index = connection.getpeername()
+        print(f"disconnecting from {index}")
+        self._connections.remove(connection)
+        dangling = self._connection_incoming.pop(index)
+        if dangling != b'':
+            print(f"{index} has left dangling incoming data <{dangling}>")
+        dangling = self._connection_outgoing[index]
+        if dangling != b'':
+            print(f"{index} has dangling outgoing data <{dangling}>")
+
+    def recv_messages(self, rlist: Iterable[socket.socket]):
+        for connection in rlist:
+            try:
+                chunk = connection.recv(2048)
+            except ConnectionError:
+                chunk = b'' # TODO: we lose the error info do we need it?
+            if chunk == b'':
+                print("failed to retrieve msg disconnecting.")
+                self._close_connection(connection, shutdown=False)
+                continue
+            print(f"got data <{chunk}> from {connection.getpeername()}")
+            index = connection.getpeername()
+            data = self._connection_incoming[index] + chunk
+            if (msg := find_wrapped(data)) is None: # No message found
+                continue
+            if msg[0] != 0:
+                print(f"{index} had sent a message fragment <{data[:msg[0]]}> discarding")
+            self._connection_incoming[index] = data[msg[1]:] # consume found message
+            self._dispatch_message(index, data[msg[0]:msg[1]]) # Send the message to every other connection
+
+    def _dispatch_message(self, index: tuple[str, int], data: bytes):
+        # For every connection except the sender reroute the data.
+        # We ensure that we are only sending whole messaged through `find_wrapped`
+        # If we didn't each connection could get an interleaving of messages
+        for key in self._connection_outgoing:
+            if key == index:
+                continue
+            self._connection_outgoing[key] += data
+
+    def send_messages(self, wlist: Iterable[socket.socket]):
+        for connection in wlist:
+            index = connection.getpeername()
+            data = self._connection_outgoing[index]
+            if data == b'':
+                continue
+
+            try:
+                sent = connection.send(data)
+            except ConnectionError:
+                sent = 0 # TODO: we lose the error info do we need it?
+            if sent == 0:
+                print(f"failed to send msg to {index} disconnecting.")
+                self._close_connection(connection, shutdown=False)
+                continue
+
+            self._connection_outgoing[index] = data[sent:]
+
+    def _exit(self):
+        for connection in self._connections[:]:
+            self._close_connection(connection, shutdown=True)
 
 class Client(ThreadScope):
     TIMEOUT = 0.1
     TIMEOUT_GROWTH = 0.1
+    NAME_TIMEOUT = 1.0
 
     def __init__(self, addr: tuple[str, int], close_event: threading.Event, name: str | None = None) -> None:
         super().__init__(close_event, name)
         self._addr = addr
         self._connection: socket.socket
+
+        self._name: str = ""
+
+        self._p_time: int = 0
 
     def _enter(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -300,7 +469,43 @@ class Client(ThreadScope):
             else:
                 print(f"found connection <{s.getpeername()}>")
                 break
+
+        # TODO: YIKES
         self._connection = s
+        s.settimeout(Client.NAME_TIMEOUT)
+        name_data = recv(s)
+        name_msg = unwrap(name_data) if name_data else None
+        name, time = (None, None) if name_msg is None else name_msg
+        if name is not None and isinstance(name, AssignNameMessage) and name.sender == "Facilitator":
+            print(f"Got name {name.name} from {name.sender} @ {time}")
+            self._name = name.name
+        else:
+            print("Never got name msg from Faciliator closing")
+            self._close_event.set()
+            return
+
+        s.settimeout(Client.TIMEOUT)
+        self._p_time = ms_since_epoch()
+
+    def _run(self):
+        time = ms_since_epoch()
+        if self._p_time + 2000 < time:
+            print("sending msg")
+            self._p_time = time
+            msg = TextMessage(self._name, "random tick")
+            time = ms_since_epoch()
+            send(self._connection, wrap(msg, time))
+
+        try:
+            if data := recv(self._connection):
+                print(data)
+        except TimeoutError:
+            pass
+
+    def _exit(self):
+        self._connection.shutdown(socket.SHUT_RDWR)
+        self._connection.close()
+
 
 def host():
     addr = get_private_ipv4()
