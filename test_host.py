@@ -1,11 +1,11 @@
 from arcade import Window
 
-from networking import join
+from networking import host
 
 
 def main():
     win = Window(fixed_rate=1 / 20.0)
-    view, close = join()
+    view, close = host()
     win.run(view)
     close.set()
 

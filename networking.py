@@ -8,15 +8,18 @@ import threading
 import urllib.request
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from queue import Queue
 from string import ascii_uppercase
 from time import time_ns
 from typing import ClassVar, Literal, Self
 
-from arcade import View, Window
+from arcade import Sprite, SpriteList, View, load_texture
 
 ROOM_CHR = ascii_uppercase
 ROOM_MAP = {s: idx for idx, s in enumerate(ROOM_CHR)}
+
+
 def int_to_base(x: int, base: str = ROOM_CHR):
     n, m = divmod(x, len(base))
     s = base[m]
@@ -25,6 +28,7 @@ def int_to_base(x: int, base: str = ROOM_CHR):
         s = base[m] + s
     return s
 
+
 def base_to_int(s: str, base: dict[str, int] = ROOM_MAP):
     x = 0
     size = len(base)
@@ -32,15 +36,17 @@ def base_to_int(s: str, base: dict[str, int] = ROOM_MAP):
         x = x * size + base[char]
     return x
 
+
 def get_roomcode(addr: str, port: int, mapping: str = ROOM_CHR) -> str:
-    (a1, a2, a3, a4) = (max(0, min(0xFE, int(a))) for a in addr.split('.'))
+    (a1, a2, a3, a4) = (max(0, min(0xFE, int(a))) for a in addr.split("."))
     n = (a1 << 40) + (a2 << 32) + (a3 << 24) + (a4 << 16) + max(0, min(0xFFFE, port))
     print(n)
     return int_to_base(n, mapping)
 
+
 def get_addr(room: str, mapping: dict[str, int]) -> tuple[str, int]:
     n = base_to_int(room, mapping).to_bytes(6, signed=False)
-    (a1, a2, a3, a4) = n[0:4] # automatically converts to 8-bit unsigned int
+    (a1, a2, a3, a4) = n[0:4]  # automatically converts to 8-bit unsigned int
     return f"{a1}.{a2}.{a3}.{a4}", int.from_bytes(n[4:6], "big")
 
 
@@ -49,7 +55,8 @@ def get_private_ipv4() -> str:
 
 
 def get_public_ipv4() -> str:
-    return urllib.request.urlopen("https://api.ipify.org").read().decode('utf8')
+    return urllib.request.urlopen("https://api.ipify.org").read().decode("utf8")
+
 
 def ms_since_epoch() -> int:
     return time_ns() // 1_000_000
@@ -97,7 +104,7 @@ class ThreadScope:
             while self._thread.is_alive():
                 self._thread.join(0.1)
         except KeyboardInterrupt:
-            #TODO: logging print(f"Received KeyboardInterrupt. Closing thread `{self._thread.name}`.")
+            # TODO: logging print(f"Received KeyboardInterrupt. Closing thread `{self._thread.name}`.")
             pass
         finally:
             self._close_event.set()
@@ -137,22 +144,30 @@ class Message:
         """
         Convert a message dataclass into a json byte encoding using utf-8
         """
-        as_string: str = json.dumps(asdict(self), ensure_ascii=False, check_circular=True, indent=None, separators=(',', ':'))
-        return as_string.encode(encoding='utf-8')
+        as_string: str = json.dumps(
+            asdict(self),
+            ensure_ascii=False,
+            check_circular=True,
+            indent=None,
+            separators=(",", ":"),
+        )
+        return as_string.encode(encoding="utf-8")
 
     @classmethod
     def decode(cls, data: bytes) -> Self:
         """
         Convert a utf-8 json byte encoding into a dataclass.
         """
-        return cls(**json.loads(data.decode('utf-8')))
+        return cls(**json.loads(data.decode("utf-8")))
 
-SOH = b'\x01'
-STX = b'\x02'
-ETX = b'\x03'
-EOT = b'\x04'
+
+SOH = b"\x01"
+STX = b"\x02"
+ETX = b"\x03"
+EOT = b"\x04"
 
 MIN_SIZE = 1 + 4 + 1 + 2 + 8 + 1 + 1
+
 
 def wrap(message: Message, time: int) -> bytes:
     """
@@ -167,7 +182,7 @@ def wrap(message: Message, time: int) -> bytes:
       UTF-8                UTF-8 except for time which is 64-bit int  UTF-8
     """
     data = message.encode()
-    name = message.__class__.__name__.encode('utf-8')
+    name = message.__class__.__name__.encode("utf-8")
     name_size = len(name)
     time_data = time.to_bytes(8, "little", signed=False)
 
@@ -176,11 +191,14 @@ def wrap(message: Message, time: int) -> bytes:
     head_size = 16 + name_size
     msg_size = head_size + body_size + tail_size
 
-    header = SOH + f"{msg_size:0>4X}".encode() + ETX + f"{name_size:0>2X}".encode() + name + time_data
+    header = (
+        SOH + f"{msg_size:0>4X}".encode() + ETX + f"{name_size:0>2X}".encode() + name + time_data
+    )
     body = STX + data
     tail = EOT
 
     return header + body + tail
+
 
 def unwrap(data: bytes) -> tuple[Message, int] | None:
     """
@@ -194,17 +212,18 @@ def unwrap(data: bytes) -> tuple[Message, int] | None:
     if recv_size != msg_size:
         print("The received data does not match the messages claimed size")
     name_size = int(data[6:8], base=16)
-    name = data[8:8+name_size].decode('utf-8')
-    time = int.from_bytes(data[8+name_size:16+name_size], "little", signed=False)
+    name = data[8 : 8 + name_size].decode("utf-8")
+    time = int.from_bytes(data[8 + name_size : 16 + name_size], "little", signed=False)
 
     typ: type[Message] | None = Message.get(name)
     if typ is None:
         print("Failed to unwrap valid message type")
         return None
 
-    message = typ.decode(data[17 + name_size:-1])
+    message = typ.decode(data[17 + name_size : -1])
 
     return message, time
+
 
 def find_wrapped(data: bytes) -> tuple[int, int] | None:
     """
@@ -221,29 +240,34 @@ def find_wrapped(data: bytes) -> tuple[int, int] | None:
     size = len(data)
     # Since were are looking for a very specific shape we know that it must be MIN_SIZE or more bytes
     while idx < size - MIN_SIZE:
-        if data[idx:idx+1] == SOH and data[idx+5:idx+6] == ETX:
+        if data[idx : idx + 1] == SOH and data[idx + 5 : idx + 6] == ETX:
             # We know that the data is in the form <SOH> ???? <ETX>
             try:
-                msg_size = int(data[idx+1:idx+5], base=16)
+                msg_size = int(data[idx + 1 : idx + 5], base=16)
             except ValueError:
-                pass # The message size is not a Hexadecimal number so it can't correct
+                pass  # The message size is not a Hexadecimal number so it can't correct
             else:
                 # We know the data is in the form <SOH> FFFF <ETX> so let's look for <EOT>
-                if data[idx+msg_size-1:idx+msg_size] == EOT:
-                    return idx, idx + msg_size # The shape is all correct we have a message to send.
-        idx += 1 # We haven't found a <SOH>FFF<ETX> ... <EOT> marker so move on.
+                if data[idx + msg_size - 1 : idx + msg_size] == EOT:
+                    return (
+                        idx,
+                        idx + msg_size,
+                    )  # The shape is all correct we have a message to send.
+        idx += 1  # We haven't found a <SOH>FFF<ETX> ... <EOT> marker so move on.
         continue
 
-    return None # We reached the end of the data without finding a wrapped msg
+    return None  # We reached the end of the data without finding a wrapped msg
+
 
 def send(socket: socket.socket, data: bytes) -> bool:
     sent = 0
     while sent < len(data):
         out = socket.send(data[sent:])
         if out == 0:
-            return False # Failed to send msg
+            return False  # Failed to send msg
         sent += out
     return True
+
 
 def recv(socket: socket.socket) -> Literal[False] | bytes:
     # TODO: better Validiation, and handle retrieving msg fragments
@@ -254,40 +278,43 @@ def recv(socket: socket.socket) -> Literal[False] | bytes:
     # check.
     chunks = []
     rcvd = 0
-    size = 5 # 5 bytes for <SOH> and 0000 - FFFF size string
+    size = 5  # 5 bytes for <SOH> and 0000 - FFFF size string
     while rcvd < size:
         chunk = socket.recv(size - rcvd)
-        if chunk == b'':
-            return False # Failed to recv msg
+        if chunk == b"":
+            return False  # Failed to recv msg
         rcvd += len(chunk)
         chunks.append(chunk)
-    header = b''.join(chunks)
+    header = b"".join(chunks)
     size = int(header[1:], base=16)
     while rcvd < size:
         chunk = socket.recv(min(size - rcvd, 2048))
-        if chunk == b'':
-            return False # Failed to recv msg
+        if chunk == b"":
+            return False  # Failed to recv msg
         rcvd += len(chunk)
         chunks.append(chunk)
-    return b''.join(chunks)
-
+    return b"".join(chunks)
 
 
 @dataclass
 class MouseCursorMoved(Message):
     "Mouse Cursor Moved"
+
     x: float
     y: float
     dx: float
     dy: float
 
+
 @dataclass
 class TextMessage(Message):
     text: str
 
+
 @dataclass
 class AssignNameMessage(Message):
     name: str
+
 
 class Lighthouse(ThreadScope):
     """
@@ -296,9 +323,17 @@ class Lighthouse(ThreadScope):
     Just makes connections and pipes them through the provided connections Queue.
     Won't create socket until the thread has been started.
     """
+
     TIMEOUT = 0.5
 
-    def __init__(self, addr: tuple[str, int], conn_queue: Queue[socket.socket], close_event: threading.Event, *, backlog: int = 5) -> None:
+    def __init__(
+        self,
+        addr: tuple[str, int],
+        conn_queue: Queue[socket.socket],
+        close_event: threading.Event,
+        *,
+        backlog: int = 5,
+    ) -> None:
         super().__init__(close_event)
         self._addr = addr
         self._backlog = backlog
@@ -319,7 +354,7 @@ class Lighthouse(ThreadScope):
             self._connection.settimeout(Lighthouse.TIMEOUT)
             (connection, _) = self._connection.accept()
         except TimeoutError:
-            pass # TODO: track accumulated? reset on connection?
+            pass  # TODO: track accumulated? reset on connection?
         else:
             # TODO: log address in some way?
             connection.setblocking(False)
@@ -334,9 +369,15 @@ class Facilitator(ThreadScope):
     The facilitator holds all of the connections and relays messages between clients.
     It uses non-blocking connections to handle an arbitrary number of clients.
     """
+
     SELECT_TIMEOUT = 10.0
 
-    def __init__(self, conn_queue: Queue[socket.socket], close_event: threading.Event, name: str | None = None) -> None:
+    def __init__(
+        self,
+        conn_queue: Queue[socket.socket],
+        close_event: threading.Event,
+        name: str | None = None,
+    ) -> None:
         super().__init__(close_event, name)
         self._connection_queue = conn_queue
 
@@ -351,10 +392,7 @@ class Facilitator(ThreadScope):
             return
 
         ready_to_read, ready_to_write, _ = select.select(
-            self._connections,
-            self._connections,
-            (),
-            Facilitator.SELECT_TIMEOUT
+            self._connections, self._connections, (), Facilitator.SELECT_TIMEOUT
         )
 
         self.recv_messages(ready_to_read)
@@ -366,9 +404,11 @@ class Facilitator(ThreadScope):
                 index = new.getpeername()
                 name = get_roomcode(index[0], index[1])
                 self._connections.append(new)
-                self._connection_incoming[index] = b''
-                self._connection_outgoing[index] = wrap(AssignNameMessage("Facilitator", name), ms_since_epoch())
-                print(f'got new connection {name} <{index}>')
+                self._connection_incoming[index] = b""
+                self._connection_outgoing[index] = wrap(
+                    AssignNameMessage("Facilitator", name), ms_since_epoch()
+                )
+                print(f"got new connection {name} <{index}>")
         except queue.Empty:
             pass
 
@@ -377,10 +417,10 @@ class Facilitator(ThreadScope):
         print(f"disconnecting from {index}")
         self._connections.remove(connection)
         dangling = self._connection_incoming.pop(index)
-        if dangling != b'':
+        if dangling != b"":
             print(f"{index} has left dangling incoming data <{dangling}>")
-        dangling = self._connection_outgoing[index]
-        if dangling != b'':
+        dangling = self._connection_outgoing.pop(index)
+        if dangling != b"":
             print(f"{index} has dangling outgoing data <{dangling}>")
 
     def recv_messages(self, rlist: Iterable[socket.socket]):
@@ -388,20 +428,23 @@ class Facilitator(ThreadScope):
             try:
                 chunk = connection.recv(2048)
             except ConnectionError:
-                chunk = b'' # TODO: we lose the error info do we need it?
-            if chunk == b'':
+                chunk = b""  # TODO: we lose the error info do we need it?
+            if chunk == b"":
                 print("failed to retrieve msg disconnecting.")
                 self._close_connection(connection, shutdown=False)
                 continue
-            print(f"got data <{chunk}> from {connection.getpeername()}")
+            # print(f"got data <{chunk}> from {connection.getpeername()}")
             index = connection.getpeername()
             data = self._connection_incoming[index] + chunk
-            if (msg := find_wrapped(data)) is None: # No message found
+            if (msg := find_wrapped(data)) is None:  # No message found
+                self._connection_incoming[index] = data
                 continue
             if msg[0] != 0:
-                print(f"{index} had sent a message fragment <{data[:msg[0]]}> discarding")
-            self._connection_incoming[index] = data[msg[1]:] # consume found message
-            self._dispatch_message(index, data[msg[0]:msg[1]]) # Send the message to every other connection
+                print(f"{index} had sent a message fragment <{data[: msg[0]]}> discarding")
+            self._connection_incoming[index] = data[msg[1] :]  # consume found message
+            self._dispatch_message(
+                index, data[msg[0] : msg[1]]
+            )  # Send the message to every other connection
 
     def _dispatch_message(self, index: tuple[str, int], data: bytes):
         # For every connection except the sender reroute the data.
@@ -416,13 +459,13 @@ class Facilitator(ThreadScope):
         for connection in wlist:
             index = connection.getpeername()
             data = self._connection_outgoing[index]
-            if data == b'':
+            if data == b"":
                 continue
 
             try:
                 sent = connection.send(data)
             except ConnectionError:
-                sent = 0 # TODO: we lose the error info do we need it?
+                sent = 0  # TODO: we lose the error info do we need it?
             if sent == 0:
                 print(f"failed to send msg to {index} disconnecting.")
                 self._close_connection(connection, shutdown=False)
@@ -434,19 +477,27 @@ class Facilitator(ThreadScope):
         for connection in self._connections[:]:
             self._close_connection(connection, shutdown=True)
 
+
 class Client(ThreadScope):
     TIMEOUT = 0.1
     TIMEOUT_GROWTH = 0.1
     NAME_TIMEOUT = 1.0
 
-    def __init__(self, addr: tuple[str, int], close_event: threading.Event, name: str | None = None) -> None:
+    def __init__(
+        self,
+        send_comm: queue.Queue[Message],
+        recv_comm: queue.Queue[Message],
+        addr: tuple[str, int],
+        close_event: threading.Event,
+        name: str | None = None,
+    ) -> None:
         super().__init__(close_event, name)
         self._addr = addr
         self._connection: socket.socket
 
+        self._send_comm: queue.Queue = send_comm
+        self._recv_comm: queue.Queue = recv_comm
         self._name: str = ""
-
-        self._p_time: int = 0
 
     def _enter(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -461,7 +512,9 @@ class Client(ThreadScope):
                 accumulated += duration
                 attempts += 1
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                print(f"Failed to connect after {duration:g}s (accumulated {accumulated:g}s) trying again.")
+                print(
+                    f"Failed to connect after {duration:g}s (accumulated {accumulated:g}s) trying again."
+                )
             except OSError as e:
                 print(f"Failed to connect with {e}. Exiting")
                 self._close_event.set()
@@ -476,9 +529,14 @@ class Client(ThreadScope):
         name_data = recv(s)
         name_msg = unwrap(name_data) if name_data else None
         name, time = (None, None) if name_msg is None else name_msg
-        if name is not None and isinstance(name, AssignNameMessage) and name.sender == "Facilitator":
+        if (
+            name is not None
+            and isinstance(name, AssignNameMessage)
+            and name.sender == "Facilitator"
+        ):
             print(f"Got name {name.name} from {name.sender} @ {time}")
             self._name = name.name
+            self._recv_comm.put_nowait(name)
         else:
             print("Never got name msg from Faciliator closing")
             self._close_event.set()
@@ -488,18 +546,23 @@ class Client(ThreadScope):
         self._p_time = ms_since_epoch()
 
     def _run(self):
-        time = ms_since_epoch()
-        if self._p_time + 2000 < time:
-            print("sending msg")
-            self._p_time = time
-            msg = TextMessage(self._name, "random tick")
-            time = ms_since_epoch()
-            send(self._connection, wrap(msg, time))
+        self.recv_message()
+        self.send_message()
 
+    def recv_message(self):
         try:
             if data := recv(self._connection):
-                print(data)
+                if (msg_time := unwrap(data)) is None:
+                    return
+                self._recv_comm.put(msg_time[0])
         except TimeoutError:
+            pass
+
+    def send_message(self):
+        try:
+            while msg := self._send_comm.get_nowait():
+                send(self._connection, wrap(msg, ms_since_epoch()))
+        except queue.Empty:
             pass
 
     def _exit(self):
@@ -507,7 +570,68 @@ class Client(ThreadScope):
         self._connection.close()
 
 
-def host():
+RESOURCE_ROOT = Path("./resources/networking")
+P1_CURSOR = RESOURCE_ROOT / "cursor1.png"
+P2_CURSOR = RESOURCE_ROOT / "cursor2.png"
+SP_CURSOR = RESOURCE_ROOT / "cursor3.png"
+
+
+class CursorView(View):
+    def __init__(self, send_comm: queue.Queue[Message], recv_comm: queue.Queue[Message]) -> None:
+        super().__init__()
+        self.send_comm = send_comm
+        self.recv_comm = recv_comm
+        self.name: str = ""
+
+        self.prev: tuple[float, float] = (0.0, 0.0)
+
+        self.cursor: Sprite = Sprite(load_texture(P1_CURSOR))
+        self.cursors: dict[str, Sprite] = {}
+        self.sprites: SpriteList = SpriteList()
+        self.sprites.append(self.cursor)
+
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
+        self.cursor.left = x
+        self.cursor.top = y
+
+    def on_draw(self) -> bool | None:
+        self.clear()
+        self.sprites.draw()
+
+    def on_update(self, delta_time: float) -> bool | None:
+        try:
+            while msg := self.recv_comm.get_nowait():
+                match msg:
+                    case AssignNameMessage():
+                        self.name = msg.name
+                        self.cursors[msg.name] = self.cursor
+                    case MouseCursorMoved():
+                        if msg.sender not in self.cursors:
+                            sprite = Sprite(load_texture(SP_CURSOR))
+                            self.sprites.append(sprite)
+                            self.cursors[msg.sender] = sprite
+                        self.cursors[msg.sender].left = msg.x
+                        self.cursors[msg.sender].top = msg.y
+        except queue.Empty:
+            return
+
+    def on_fixed_update(self, delta_time: float):
+        if not self.name:
+            return
+
+        x, y = self.cursor.left, self.cursor.top
+        dx, dy = x - self.prev[0], y - self.prev[1]
+        self.send_comm.put_nowait(MouseCursorMoved(self.name, x, y, dx, dy))
+        self.prev = (x, y)
+
+    def on_show_view(self) -> None:
+        self.window.set_mouse_visible(False)
+
+    def on_hide_view(self) -> None:
+        self.window.set_mouse_visible(True)
+
+
+def host() -> tuple[CursorView, threading.Event]:
     addr = get_private_ipv4()
     socket = 10000
 
@@ -517,21 +641,30 @@ def host():
     lighthouse = Lighthouse((addr, socket), conn_queue, close)
     facilitator = Facilitator(conn_queue, close)
 
+    send_comm = queue.Queue()
+    recv_comm = queue.Queue()
+    client = Client(send_comm, recv_comm, (addr, socket), close)
+
     lighthouse.start()
     facilitator.start()
+    client.start()
 
-    facilitator.watch()
+    return CursorView(send_comm, recv_comm), close
 
-def join():
+
+def join() -> tuple[CursorView, threading.Event]:
     addr = get_private_ipv4()
     socket = 10000
 
     close = threading.Event()
 
-    client = Client((addr, socket), close)
+    send_comm = queue.Queue()
+    recv_comm = queue.Queue()
+    client = Client(send_comm, recv_comm, (addr, socket), close)
     client.start()
 
-    client.watch()
+    return CursorView(send_comm, recv_comm), close
+
 
 if __name__ == "__main__":
     host()
