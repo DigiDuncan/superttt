@@ -1,3 +1,4 @@
+
 from arcade import Rect, Sprite, SpriteList
 
 from superttt.game.board import Board, State, Tile

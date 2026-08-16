@@ -4,7 +4,7 @@ import arcade
 
 from .board import Board, Tile, State
 from arcade import Rect, LBWH, draw_rect_outline, draw_texture_rect, load_texture, draw_rect_filled
-from arcade.types import Point2, Color
+from arcade.types import Point2
 import arcade.color
 
 from logging import getLogger
