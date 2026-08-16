@@ -1,5 +1,3 @@
-from typing import Any
-
 from arcade import Rect, Sprite, SpriteList
 
 from superttt.game.board import Board, State, Tile
