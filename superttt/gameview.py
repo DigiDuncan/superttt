@@ -3,12 +3,12 @@
 from functools import reduce
 from operator import or_
 
-from arcade import Camera2D, Rect, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_rect_filled, draw_rect_outline, draw_texture_rect
+from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_rect_filled, draw_rect_outline, draw_texture_rect
 import arcade.key
 
 from superttt.game import board
-from superttt.game.board import Board, State, Tile, create_board
-from superttt.game.drawing import draw_board, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
+from superttt.game.board import State, Tile, create_board
+from superttt.game.drawing import draw_board_bg, draw_board_overlay, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
 from superttt.game.game import Game
 from superttt.lib.utils import ease_color, format_time, ease_rect, ease
 from .context import nav
@@ -65,6 +65,9 @@ class GameView(View):
         self.turn_label.right = self.current_turn_rect.left - 5
         self.spritelist.append(self.turn_label)
 
+        self.multiplayer = False
+        self.multiplayer_side: State = State.NONE   # Weirdly, NONE could be used for spectators!
+
         self.timer_text = Text(
             "0:00",
             self.game.rect.left,
@@ -96,6 +99,10 @@ class GameView(View):
             width=self.width / 2,
         )
 
+    @property
+    def our_turn(self) -> bool:
+        return not self.multiplayer or (self.multiplayer and self.current_turn == self.multiplayer_side)
+
     def reset(self):
         self.game.board = board.create_board(self.grid_size, self.depth)
         self.current_turn = State.X
@@ -106,37 +113,40 @@ class GameView(View):
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
         if self.paused:
             return
-        tile = get_tile_from_position((x, y), self.game.board, self.game.rect)
-        if tile:
-            if tile.state != State.NONE:
-                return
-            if tile.id not in self.next_moves:
-                return
-            tile.state = self.current_turn
-            self.latest_tile = tile
-            self.last_move_time = self.time_elapsed
-            self.next_moves = self.game.board.get_valid_moves_from_latest_move(self.latest_tile.id)
-            self.current_turn = State.O if self.current_turn == State.X else State.X
 
         if (x, y) in self.quit.rect:
             nav.pop_to_start()
 
-        self.game.update_state()
+        if self.our_turn:
+            tile = get_tile_from_position((x, y), self.game.board, self.game.rect)
+            if tile:
+                if tile.state != State.NONE:
+                    return
+                if tile.id not in self.next_moves:
+                    return
+                tile.state = self.current_turn
+                self.latest_tile = tile
+                self.last_move_time = self.time_elapsed
+                self.next_moves = self.game.board.get_valid_moves_from_latest_move(self.latest_tile.id)
+                self.current_turn = State.O if self.current_turn == State.X else State.X
+                self.game.update_state()
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
-        tile = get_tile_from_position((x, y), self.game.board, self.game.rect)
         if self.debug:
+            tile = get_tile_from_position((x, y), self.game.board, self.game.rect)
             if tile:
                 self.debug_text.text = "[DEBUG] " + str(tile.id)
             else:
                 self.debug_text.text = "[DEBUG]"
-        if tile:
-            if tile.id in self.next_moves:
-                self.hover_id = tile.id
+        if self.our_turn:
+            tile = get_tile_from_position((x, y), self.game.board, self.game.rect)
+            if tile:
+                if tile.id in self.next_moves:
+                    self.hover_id = tile.id
+                else:
+                    self.hover_id = None
             else:
                 self.hover_id = None
-        else:
-            self.hover_id = None
 
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.R:
@@ -185,26 +195,13 @@ class GameView(View):
                 for sss in super_super_splits:
                     draw_rect_outline(sss, color.replace(a = grid_alpha), 1)
 
-    def draw_board_bg(self, board: Board, rect: Rect):
-        if board.id:
-            if len(board.id) == 1:
-                even = board.id[0] % 2 == 0
-            else:
-                even = board.id[-1] % 2 == 0 if board.id[-2] % 2 == 0 else board.id[-1] % 2 == 1
-            if even:
-                draw_rect_filled(rect, arcade.color.WHITE.replace(a = 32))
-        if board.type == Board:
-            splits = split_rect(rect, board.size)
-            for n, split in enumerate(splits):
-                self.draw_board_bg(board.items[n], split)
-
     def on_draw(self) -> bool | None:
         self.clear()
         draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
         with self.camera.activate():
-            self.draw_board_bg(self.game.board, self.game.rect)
+            draw_board_bg(self.game.board, self.game.rect)
             self.game.spritelist.draw()
-            draw_board(self.game.board, self.game.rect)
+            draw_board_overlay(self.game.board, self.game.rect)
             self.draw_next_move_animation()
             if self.hover_id:
                 draw_texture_rect(TEXTURES["x"] if self.current_turn == State.X else TEXTURES["o"], get_rect_from_coordinate(self.hover_id, self.game.rect, self.grid_size), alpha = 127)

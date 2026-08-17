@@ -32,7 +32,20 @@ def split_rect(rect: Rect, grid_size: int) -> list[Rect]:
             new_rects.append(LBWH(start_x + (new_rect_size.x * j), start_y + (new_rect_size.y * i), new_rect_size.x, new_rect_size.y))
     return new_rects
 
-def draw_board(board: Board, rect: Rect):
+def draw_board_bg(board: Board, rect: Rect):
+    if board.id:
+        if len(board.id) == 1:
+            even = board.id[0] % 2 == 0
+        else:
+            even = board.id[-1] % 2 == 0 if board.id[-2] % 2 == 0 else board.id[-1] % 2 == 1
+        if even:
+            draw_rect_filled(rect, arcade.color.WHITE.replace(a = 32))
+    if board.type == Board:
+        splits = split_rect(rect, board.size)
+        for n, split in enumerate(splits):
+            draw_board_bg(board.items[n], split)  # type: ignore -- it's always a Board at this point
+
+def draw_board_overlay(board: Board, rect: Rect):
     if round(rect.width, 1) != round(rect.height, 1):
         logger.warning(f"Rect not a square! {rect.width}x{rect.height}")
 
@@ -41,7 +54,7 @@ def draw_board(board: Board, rect: Rect):
     if board.type == Board:
         draw_rect_outline(rect, arcade.color.WHITE)
         for n, split in enumerate(splits):
-            draw_board(board.items[n], split) # type: ignore -- it's always a Board at this point
+            draw_board_overlay(board.items[n], split) # type: ignore -- it's always a Board at this point
 
     if board.state != State.NONE:
         draw_rect_filled(rect, (0, 0, 0, 200))
@@ -53,6 +66,7 @@ def draw_board(board: Board, rect: Rect):
     if board.stalemate:
         draw_texture_rect(TEXTURES["stalemate"], rect, alpha = 128)
 
+@cache
 def get_tile_from_position(point: Point2, board: Board, rect: Rect) -> Tile | None:
     splits = split_rect(rect, board.size)
 
@@ -65,10 +79,10 @@ def get_tile_from_position(point: Point2, board: Board, rect: Rect) -> Tile | No
             if point in split:
                 return get_tile_from_position(point, board.items[n], split) # type: ignore -- it's always a Board at this point
 
+@cache
 def get_rect_from_coordinate(coord: tuple[int, ...], rect: Rect, grid_size: int) -> Rect:
     current_rect = rect
     for n, i in enumerate(coord):
         splits = split_rect(current_rect, grid_size)
         current_rect = splits[i]
     return current_rect
-
