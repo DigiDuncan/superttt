@@ -38,6 +38,7 @@ class Game():
                 sprite.height = split.height
                 sprite.width = split.width
                 sprite.id = id + (n,)
+                sprite.alpha = 128 if tile.state == State.NONE else 255
                 spritelist.append(sprite)
 
         elif board.type == Board:

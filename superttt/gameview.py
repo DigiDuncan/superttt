@@ -11,8 +11,8 @@ from superttt.game.board import State, Tile, create_board
 from superttt.game.drawing import draw_board_bg, draw_board_overlay, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
 from superttt.game.game import Game
 from superttt.lib.utils import ease_color, format_time, ease_rect, ease
-from .context import nav
 from superttt.lib.gradient import draw_rect_gradient
+from .context import nav
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
 GRADIENT = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
@@ -185,15 +185,18 @@ class GameView(View):
                 outline = reduce(or_, new_move_rects)
                 draw_rect_outline(outline, color, 3)
             grid_alpha = 255 if self.time_elapsed <= self.last_move_time + MOVE_TIME else int(ease(255, 0, self.last_move_time + MOVE_TIME, self.last_move_time + MOVE_TIME + MOVE_TIME, self.time_elapsed))
-            super_board_id = self.latest_tile.id[:-1]
-            super_board = get_rect_from_coordinate(super_board_id, self.game.rect, self.grid_size)
-            super_super_board_id = super_board_id[1:]
-            super_super_board = get_rect_from_coordinate(super_super_board_id, self.game.rect, self.grid_size)
-            draw_rect = ease_rect(super_board, super_super_board, self.last_move_time, self.last_move_time + MOVE_TIME, self.time_elapsed)
-            super_super_splits = split_rect(draw_rect, self.grid_size)
-            with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
-                for sss in super_super_splits:
-                    draw_rect_outline(sss, color.replace(a = grid_alpha), 1)
+
+            board_id = self.latest_tile.id[:-1]
+            for n in range(len(board_id)):
+                board = get_rect_from_coordinate(board_id, self.game.rect, self.grid_size)
+                super_board_id = board_id[1:]
+                super_board = get_rect_from_coordinate(super_board_id, self.game.rect, self.grid_size)
+                draw_rect = ease_rect(board, super_board, self.last_move_time, self.last_move_time + MOVE_TIME, self.time_elapsed)
+                super_splits = split_rect(draw_rect, self.grid_size)
+                with self.window.ctx.enabled(self.window.ctx.DEPTH_TEST):
+                    for ss in super_splits:
+                        draw_rect_outline(ss, color.replace(a = int(grid_alpha / (n + 1))), 1)
+                board_id = board_id[:-1]
 
     def on_draw(self) -> bool | None:
         self.clear()
