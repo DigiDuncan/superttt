@@ -7,7 +7,7 @@ from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_re
 import arcade.key
 
 from superttt.game import board
-from superttt.game.board import State, Tile, create_board
+from superttt.game.board import Board, State, Tile, create_board
 from superttt.game.drawing import draw_board_bg, draw_board_overlay, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
 from superttt.game.game import Game
 from superttt.lib.utils import ease_color, format_time, ease_rect, ease
@@ -67,6 +67,9 @@ class GameView(View):
 
         self.multiplayer = False
         self.multiplayer_side: State = State.NONE   # Weirdly, NONE could be used for spectators!
+
+        self.easy_mode = False
+        self.hover_board_id: tuple | None = None
 
         self.timer_text = Text(
             "0:00",
@@ -143,10 +146,13 @@ class GameView(View):
             if tile:
                 if tile.id in self.next_moves:
                     self.hover_id = tile.id
+                    self.hover_board_id = tile.id[1:]
                 else:
                     self.hover_id = None
+                    self.hover_board_id = None
             else:
                 self.hover_id = None
+
 
     def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
         if symbol == arcade.key.R:
@@ -213,6 +219,10 @@ class GameView(View):
             draw_texture_rect(TEXTURES["x"], self.current_turn_rect)
         else:
             draw_texture_rect(TEXTURES["o"], self.current_turn_rect)
+
+        if self.easy_mode:
+            if self.hover_board_id and self.game.board.depth > 1:
+                draw_rect_filled(get_rect_from_coordinate(self.hover_board_id, self.game.rect, self.grid_size), arcade.color.GREEN.replace(a = 64))
 
         if self.debug:
             self.debug_text.draw()

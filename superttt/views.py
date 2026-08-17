@@ -48,6 +48,9 @@ class StartView(View):
             self.splash_shadow.text = s
             self.splash_text.text = s
 
+    def on_show_view(self) -> None:
+        self.setup()
+
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
         for button in [self.new_game, self.quit]:
             if (x, y) in button.rect:
