@@ -1,0 +1,112 @@
+import queue
+import sys
+import threading
+from dataclasses import dataclass
+
+from arcade import Sprite, SpriteList, View, Window, load_texture
+from pyglet.window import MouseCursor
+
+import superttt.lib.networking.message as msg
+import superttt.lib.networking.socketing as sk
+from superttt.lib.networking import udp
+
+
+@dataclass
+class Ping(msg.Message):
+    ping_no: int
+
+
+@dataclass
+class CursorMovedMessage(msg.Message):
+    x: float
+    y: float
+    dx: float
+    dy: float
+
+
+class CursorView(View):
+    def __init__(self, incoming: queue.Queue, outgoing: queue.Queue):
+        super().__init__()
+        self.incoming = incoming
+        self.outgoing = outgoing
+
+        self._cursor: Sprite = Sprite("./resources/networking/cursor1.png", 3)
+        self._cursors: SpriteList[Sprite] = SpriteList()
+        self._others: dict[int, Sprite] = {}
+        self._cursors.append(self._cursor)
+
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
+        self._cursor.left = x
+        self._cursor.top = y
+
+        self.outgoing.put_nowait((CursorMovedMessage(x, y, dx, dy), sk.ms_since_epoch()))
+
+    def on_draw(self) -> bool | None:
+        self.clear()
+        self._cursors.draw(pixelated=True)
+
+    def on_update(self, delta_time: float) -> bool | None:
+        try:
+            while new := self.incoming.get_nowait():
+                msg, time, uid = new
+
+                match msg:
+                    case CursorMovedMessage():
+                        if uid not in self._others:
+                            sprite = Sprite("./resources/networking/cursor3.png", 2)
+                            self._others[uid] = sprite
+                            self._cursors.append(sprite)
+                        self._others[uid].left = msg.x
+                        self._others[uid].top = msg.y
+        except queue.Empty:
+            pass
+
+    def on_show_view(self) -> None:
+        self.window.set_mouse_visible(False)
+
+    def on_hide_view(self) -> None:
+        self.window.set_mouse_visible(True)
+
+
+def host(addr, port) -> threading.Event:
+    # TODO: obviously we want a way to communicate and retrieve info from the facilitator
+    close_server = threading.Event()
+
+    faciliator = udp.UDPFacilitator((addr, port), close_server)
+    faciliator.start()
+
+    return close_server
+
+
+def join(addr, port) -> tuple[threading.Event, queue.Queue, queue.Queue]:
+    close_client = threading.Event()
+
+    incoming = queue.Queue()
+    outgoing = queue.Queue()
+    client = udp.UDPClient("Host", (addr, port), incoming, outgoing, close_client)
+
+    client.start()
+
+    return close_client, incoming, outgoing
+
+
+def main():
+    is_host = len(sys.argv) > 1
+    addr, port = sk.get_private_ipv4(), 10000
+    if is_host:
+        close_server = host(addr, port)
+
+    close_client, inc, out = join(addr, port)
+
+    win = Window()
+    view = CursorView(inc, out)
+
+    win.run(view)
+
+    close_client.set()
+    if is_host:
+        close_server.set()  # type: ignore -- Def exists
+
+
+if __name__ == "__main__":
+    main()
