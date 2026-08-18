@@ -65,10 +65,15 @@ class TCPFacilitator(ThreadScope):
         for connection in rlist:
             try:
                 header = connection.recv(6, socket.MSG_PEEK)
-                if len(header) == 0 or (size := get_wrapped_size(header)) is None:
+                if len(header) == 0:
+                    print("Header retrieved nothing so connection closed")
+                    raise ConnectionError
+                if (size := get_wrapped_size(header)) is None:
+                    print("Could not retrieve size from header")
                     raise ConnectionError
                 msg = connection.recv(size)
                 if len(msg) != size:
+                    print("Did not fully retrieve the msg in one call")
                     raise ConnectionError
                 self._dispatch_message(replace_sender(msg, self._uid[connection]), connection)
             except ConnectionError:
@@ -169,12 +174,18 @@ class TCPClient(ThreadScope):
             return
         try:
             header = self._connection.recv(6, socket.MSG_PEEK)
-            if len(header) == 0 or (size := get_wrapped_size(header)) is None:
+            if len(header) == 0:
+                print("Header retrieved nothing so connection closed")
+                raise ConnectionError
+            if (size := get_wrapped_size(header)) is None:
+                print("Could not retrieve size from header")
                 raise ConnectionError
             msg = self._connection.recv(size)
             if len(msg) != size:
+                print("Did not fully retrieve the msg in one call")
                 raise ConnectionError
             if (package := unwrap(msg)) is None:
+                print(f"Could not unwrap the message {msg}")
                 raise ConnectionError
             self._incoming.put_nowait(package)
         except ConnectionError:
