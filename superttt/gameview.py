@@ -1,20 +1,38 @@
 # pyright: reportOptionalOperand=false
 
 from functools import reduce
+from logging import getLogger
 from operator import or_
 
-from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_rect_filled, draw_rect_outline, draw_texture_rect
 import arcade.key
+from arcade import (
+    LBWH,
+    XYWH,
+    Camera2D,
+    Sprite,
+    SpriteList,
+    Text,
+    View,
+    draw_rect_filled,
+    draw_rect_outline,
+    draw_texture_rect,
+)
 
 from superttt.game import board
 from superttt.game.board import State, Tile, create_board
-from superttt.game.drawing import draw_board_bg, draw_board_overlay, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
+from superttt.game.drawing import (
+    TEXTURES,
+    draw_board_bg,
+    draw_board_overlay,
+    get_rect_from_coordinate,
+    get_tile_from_position,
+    split_rect,
+)
 from superttt.game.game import Game
-from superttt.lib.utils import ease_color, format_time, ease_rect, ease
 from superttt.lib.gradient import draw_rect_gradient
-from .context import nav
+from superttt.lib.utils import ease, ease_color, ease_rect, format_time
 
-from logging import getLogger
+from .context import nav
 
 logger = getLogger("superttt")
 

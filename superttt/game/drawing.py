@@ -1,19 +1,18 @@
 from functools import cache
+from logging import getLogger
 
 import arcade
-
-from .board import Board, Tile, State
-from arcade import Rect, LBWH, draw_rect_outline, draw_texture_rect, load_texture, draw_rect_filled
-from arcade.types import Point2
 import arcade.color
+from arcade import LBWH, Rect, draw_rect_filled, draw_rect_outline, draw_texture_rect, load_texture
+from arcade.types import Point2
 
-from logging import getLogger
+from .board import Board, State, Tile
 
 logger = getLogger("superttt")
 
 TEXTURES = {name: load_texture(f"resources/superttt/{name}.png") for name in ('x', 'x_gray', 'o', 'o_gray', 'empty', 'stalemate')}
 
-DEPTH_COLORS = {
+DEPTH_COLORS = { # ? Why is this a dict?
     0: arcade.color.RED,
     1: arcade.color.GREEN,
     2: arcade.color.BLUE,

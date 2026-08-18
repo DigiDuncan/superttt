@@ -1,14 +1,13 @@
 import random
 
-from arcade import Sprite, SpriteList, Text, View, Rect, LRBT
 import arcade.key
-
+from arcade import LRBT, Rect, Sprite, SpriteList, Text, View
 from pyglet.graphics import Batch, Group
 
 from superttt.gameview import GameView
+from superttt.lib.gradient import draw_rect_gradient
 
 from .context import nav
-from superttt.lib.gradient import draw_rect_gradient
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
 GRADIENT = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
