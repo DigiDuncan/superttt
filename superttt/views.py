@@ -202,6 +202,21 @@ class SettingsView(View):
         if self.hovering_caution:
             self.caution_text.draw()
 
+class LobbyView(View):
+
+    def __init__(self, is_local: bool) -> None:
+        super().__init__()
+        self.is_local: bool = is_local
+
+        # TODO: Setup a Facilitator and local Client
+        # TODO: Get own uid, set myself as player1
+        # TODO: show roomcode based on is_local
+
+        # TODO: remember player2 and spectators
+        # TODO: add ability to swap which player is which
+
+
+
 class ModeView(View):
     def __init__(self):
         super().__init__()
