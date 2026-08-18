@@ -110,14 +110,23 @@ def main():
 
     close_client, inc, out = join(addr, port)
 
-    win = Window()
-    view = CursorView(inc, out)
+    try:
+        win = Window()
+    except KeyboardInterrupt:
+        close_client.set()
+        if is_host:
+            close_server.set()  # type: ignore -- Def exists
+        sys.exit(1)
 
-    win.run(view)
-
-    close_client.set()
-    if is_host:
-        close_server.set()  # type: ignore -- Def exists
+    try:
+        view = CursorView(inc, out)
+        win.run(view)
+    except KeyboardInterrupt:
+        win.close()
+    finally:
+        close_client.set()
+        if is_host:
+            close_server.set()  # type: ignore -- Def exists
 
 
 if __name__ == "__main__":
