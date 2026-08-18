@@ -71,6 +71,17 @@ class GameView(View):
         self.easy_mode = False
         self.hover_board_id: tuple | None = None
 
+        self.easy_text = Text(
+                    "[EASY]",
+                    5,
+                    self.height - 5,
+                    font_size=11,
+                    anchor_y="top",
+                    font_name=DEBUG_FONT,
+                    multiline=True,
+                    width=self.width / 2,
+                )
+
         self.timer_text = Text(
             "0:00",
             self.game.rect.left,
@@ -94,7 +105,7 @@ class GameView(View):
         self.debug_text = Text(
             "[DEBUG]",
             5,
-            self.height - 5,
+            self.easy_text.bottom - 5,
             font_size=11,
             anchor_y="top",
             font_name=DEBUG_FONT,
@@ -165,6 +176,8 @@ class GameView(View):
         elif symbol == arcade.key.SPACE:
             self.paused = not self.paused
             self.paused_sprite.visible = self.paused
+        elif symbol == arcade.key.E:
+            self.easy_mode = not self.easy_mode
 
     def on_update(self, delta_time: float):
         if not self.paused:
@@ -221,8 +234,9 @@ class GameView(View):
             draw_texture_rect(TEXTURES["o"], self.current_turn_rect)
 
         if self.easy_mode:
-            if self.hover_board_id and self.game.board.depth > 1:
+            if self.hover_board_id:
                 draw_rect_filled(get_rect_from_coordinate(self.hover_board_id, self.game.rect, self.grid_size), arcade.color.GREEN.replace(a = 64))
+            self.easy_text.draw()
 
         if self.debug:
             self.debug_text.draw()
