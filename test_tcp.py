@@ -8,7 +8,7 @@ from arcade import Sprite, SpriteList, View, Window
 import superttt.lib.networking.message as msg
 import superttt.lib.networking.room as rm
 import superttt.lib.networking.socketing as sk
-from superttt.lib.networking import udp
+from superttt.lib.networking import tcp
 
 
 @dataclass
@@ -67,7 +67,7 @@ def host(port) -> threading.Event:
     # TODO: obviously we want a way to communicate and retrieve info from the facilitator
     close_server = threading.Event()
 
-    faciliator = udp.UDPFacilitator(port, close_server)
+    faciliator = tcp.TCPFacilitator(port, close_server)
     faciliator.start()
 
     return close_server
@@ -78,7 +78,7 @@ def join(addr, port) -> tuple[threading.Event, queue.Queue, queue.Queue]:
 
     incoming = queue.Queue()
     outgoing = queue.Queue()
-    client = udp.UDPClient("Host", (addr, port), incoming, outgoing, close_client)
+    client = tcp.TCPClient("Host", (addr, port), incoming, outgoing, close_client)
 
     client.start()
 

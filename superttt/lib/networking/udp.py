@@ -23,17 +23,17 @@ from .threading import ThreadScope
 class UDPFacilitator(ThreadScope):
     CLIENT_TIMEOUT = 10_000
 
-    def __init__(self, addr: IPv4Addr, close_event: ThreadEvent, name: str | None = None) -> None:
-        super().__init__(close_event, name)
+    def __init__(self, port: int, close_event: ThreadEvent) -> None:
+        super().__init__(close_event)
         self._socket: socket.socket
-        self._addr = addr
+        self._port = port
         self._connections: list[IPv4Addr] = []
         self._uid: dict[IPv4Addr, int] = {}
         self._timeout: dict[IPv4Addr, int] = {}
 
     def _enter(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.bind(("0.0.0.0", self._addr[1]))
+        self._socket.bind(("0.0.0.0", self._port))
         self._socket.settimeout(0.0)
         print("Started Facilitator")
 
@@ -69,7 +69,7 @@ class UDPFacilitator(ThreadScope):
         except BlockingIOError:
             return True
         except ConnectionResetError:
-            return False  # Windows turns a failed send into the next
+            return False  # Windows turns a failed sendto into the next recvfrom
 
     def _connect(self, addr: IPv4Addr):
         if addr in self._uid:
@@ -82,13 +82,15 @@ class UDPFacilitator(ThreadScope):
         self._uid[addr] = uid
         self._timeout[addr] = ms_since_epoch()
 
-    def _disconnect(self, addr: IPv4Addr):
+    def _disconnect(self, addr: IPv4Addr, alert: bool = True):
         if addr not in self._uid:
             return
 
         self._connections.remove(addr)
         self._uid.pop(addr)
         self._timeout.pop(addr)
+        if alert:
+            print("Connection closed but alerting other connections is not implemented.")
 
     def _dispatch_message(self, msg: bytes, addr: IPv4Addr):
         for other in self._connections[:]:
