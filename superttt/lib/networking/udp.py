@@ -52,6 +52,7 @@ class UDPFacilitator(ThreadScope):
             # No message we are sending will be more than 1024 bytes
             (msg, addr) = self._socket.recvfrom(1024)
             if len(msg) == 0:  # If we got an empty UDP packet then the client was saying hi
+                print(f"Connection Estalished with new Client <{addr}>")
                 self._connect(addr)
                 return False
             if (size := get_wrapped_size(msg)) is None:
