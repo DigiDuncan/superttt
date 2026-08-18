@@ -10,7 +10,7 @@ def uid_from_addr(addr: tuple[str, int]) -> int:
 
 
 def addr_from_uid(uid: int) -> tuple[str, int]:
-    ip = f"{(uid >> 40) & 0xFF}.{(uid >> 32) & 0xFF}.{(uid >> 24) & 0xFF}.{(uid >> 15) & 0xFF}"
+    ip = f"{(uid >> 40) & 0xFF}.{(uid >> 32) & 0xFF}.{(uid >> 24) & 0xFF}.{(uid >> 16 & 0xFF) & 0xFF}"
     port = uid & 0xFFFF
     return ip, port
 

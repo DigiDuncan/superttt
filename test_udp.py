@@ -12,10 +12,6 @@ from superttt.lib.networking import udp
 
 
 @dataclass
-class ALiveMessage(msg.Message): ...
-
-
-@dataclass
 class CursorMovedMessage(msg.Message):
     x: float
     y: float
@@ -34,8 +30,6 @@ class CursorView(View):
         self._others: dict[int, Sprite] = {}
         self._cursors.append(self._cursor)
 
-        self._alive_timer: float = self.window.time
-
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
         self._cursor.left = x
         self._cursor.top = y
@@ -47,10 +41,6 @@ class CursorView(View):
         self._cursors.draw(pixelated=True)
 
     def on_update(self, delta_time: float) -> bool | None:
-        if self._alive_timer + 2 < self.window.time:
-            self.outgoing.put_nowait((ALiveMessage(), sk.ms_since_epoch()))
-            self._alive_timer = self.window.time
-
         try:
             while new := self.incoming.get_nowait():
                 msg, time, uid = new
@@ -108,6 +98,7 @@ def main():
             print(f"Invalid room code <{sys.argv[1]}>")
             sys.exit(1)
 
+    print(addr, port)
     close_client, inc, out = join(addr, port)
 
     try:

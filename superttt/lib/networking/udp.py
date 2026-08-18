@@ -33,7 +33,7 @@ class UDPFacilitator(ThreadScope):
 
     def _enter(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.bind(self._addr)
+        self._socket.bind(("0.0.0.0", self._addr[1]))
         self._socket.settimeout(0.0)
         print("Started Facilitator")
 
@@ -52,7 +52,7 @@ class UDPFacilitator(ThreadScope):
             # No message we are sending will be more than 1024 bytes
             (msg, addr) = self._socket.recvfrom(1024)
             if len(msg) == 0:  # If we got an empty UDP packet then the client was saying hi
-                print(f"Connection Estalished with new Client <{addr}>")
+                print(f"Ping message from <{addr}>")
                 self._connect(addr)
                 return False
             if (size := get_wrapped_size(msg)) is None:
@@ -104,6 +104,8 @@ class UDPFacilitator(ThreadScope):
 
 
 class UDPClient(ThreadScope):
+    ALIVE_IIME = 5_000
+
     def __init__(
         self,
         name: str,
@@ -120,10 +122,13 @@ class UDPClient(ThreadScope):
         self._addr: IPv4Addr = addr
         self._uid: int = UNKNOWN_UID
 
+        self._alive_timer: int
+
     def _enter(self):
         self._connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._connection.sendto(b"", self._addr)
         self._connection.settimeout(0.0)
+        self._alive_timer = ms_since_epoch()
         print(f"connection msg sent, client bound to {self._connection.getsockname()}")
 
     def _run(self):
@@ -162,6 +167,9 @@ class UDPClient(ThreadScope):
 
     def _send_messages(self):
         try:
+            if self._alive_timer + UDPClient.ALIVE_IIME < ms_since_epoch():
+                self._alive_timer = ms_since_epoch()
+                self._connection.sendto(b'', self._addr)
             while new := self._outgoing.get_nowait():
                 self._connection.sendto(wrap(new[0], new[1], self._uid), self._addr)
         except QueueEmptyError:
