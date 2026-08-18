@@ -16,24 +16,26 @@ from threading import Event as ThreadEvent
 
 from .message import Message, get_wrapped_size, replace_sender, unwrap, wrap
 from .room import uid_from_addr
-from .socketing import UNKNOWN_UID, IPv4Addr, ms_since_epoch
+from .socketing import FACILITATOR_UID, UNKNOWN_UID, ConnectionClosed, IPv4Addr, ms_since_epoch
 from .threading import ThreadScope
 
 
 class UDPFacilitator(ThreadScope):
     CLIENT_TIMEOUT = 10_000
 
-    def __init__(self, port: int, close_event: ThreadEvent) -> None:
+    def __init__(self, port: int, auth_comm: Queue[tuple[Message, int]], close_event: ThreadEvent, addr: str | None = None) -> None:
         super().__init__(close_event)
         self._socket: socket.socket
+        self._addr: str = "0.0.0.0" if addr is None else addr
         self._port = port
+        self._auth_comm: Queue[tuple[Message, int]] = auth_comm
         self._connections: list[IPv4Addr] = []
         self._uid: dict[IPv4Addr, int] = {}
         self._timeout: dict[IPv4Addr, int] = {}
 
     def _enter(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._socket.bind(("0.0.0.0", self._port))
+        self._socket.bind((self._addr, self._port))
         self._socket.settimeout(0.0)
         print("Started Facilitator")
 
@@ -71,6 +73,15 @@ class UDPFacilitator(ThreadScope):
         except ConnectionResetError:
             return False  # Windows turns a failed sendto into the next recvfrom
 
+    def _send_messages(self):
+        try:
+            while new := self._auth_comm.get_nowait():
+                msg = wrap(new[0], new[1], FACILITATOR_UID)
+                self._dispatch_message(msg, None)
+        except QueueEmptyError:
+            pass
+
+
     def _connect(self, addr: IPv4Addr):
         if addr in self._uid:
             self._timeout[addr] = ms_since_epoch()
@@ -85,14 +96,19 @@ class UDPFacilitator(ThreadScope):
     def _disconnect(self, addr: IPv4Addr, alert: bool = True):
         if addr not in self._uid:
             return
+        try:
+            self._connections.remove(addr)
+        except ValueError:
+            pass
+        uid = self._uid.pop(addr, None)
+        self._timeout.pop(addr, None)
+        if alert and uid is not None:
+            self._dispatch_message(
+                wrap(ConnectionClosed(uid), ms_since_epoch(),FACILITATOR_UID),
+                addr,
+            )
 
-        self._connections.remove(addr)
-        self._uid.pop(addr)
-        self._timeout.pop(addr)
-        if alert:
-            print("Connection closed but alerting other connections is not implemented.")
-
-    def _dispatch_message(self, msg: bytes, addr: IPv4Addr):
+    def _dispatch_message(self, msg: bytes, addr: IPv4Addr | None):
         for other in self._connections[:]:
             if other == addr:
                 continue

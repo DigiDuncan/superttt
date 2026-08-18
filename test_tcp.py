@@ -47,14 +47,28 @@ class CursorView(View):
 
                 match msg:
                     case CursorMovedMessage():
-                        if uid not in self._others:
-                            sprite = Sprite("./resources/networking/cursor3.png", 2)
-                            self._others[uid] = sprite
-                            self._cursors.append(sprite)
+                        self._connect(uid)
                         self._others[uid].left = msg.x
                         self._others[uid].top = msg.y
+                    case sk.ConnectionClosed():
+                        if msg.uid not in self._others:
+                            continue
+                        sprite = self._others.pop(msg.uid)
+                        self._cursors.remove(sprite)
+                    case sk.ConnectionOpened():
+                        self._connect(msg.uid)
+                        self.outgoing.put_nowait((CursorMovedMessage(self._cursor.left, self._cursor.top, 0, 0), sk.ms_since_epoch()))
+                    case sk.ExistingConnections():
+                        for uid in msg.uids:
+                            self._connect(uid)
         except queue.Empty:
             pass
+
+    def _connect(self, uid: int):
+        if uid not in self._others:
+            sprite = Sprite("./resources/networking/cursor3.png", 2)
+            self._others[uid] = sprite
+            self._cursors.append(sprite)
 
     def on_show_view(self) -> None:
         self.window.set_mouse_visible(False)
@@ -67,7 +81,7 @@ def host(port) -> threading.Event:
     # TODO: obviously we want a way to communicate and retrieve info from the facilitator
     close_server = threading.Event()
 
-    faciliator = tcp.TCPFacilitator(port, close_server)
+    faciliator = tcp.TCPFacilitator(port, queue.Queue(), close_server)
     faciliator.start()
 
     return close_server

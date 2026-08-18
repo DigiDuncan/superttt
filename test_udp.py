@@ -67,7 +67,7 @@ def host(port) -> threading.Event:
     # TODO: obviously we want a way to communicate and retrieve info from the facilitator
     close_server = threading.Event()
 
-    faciliator = udp.UDPFacilitator(port, close_server)
+    faciliator = udp.UDPFacilitator(port, queue.Queue(), close_server)
     faciliator.start()
 
     return close_server

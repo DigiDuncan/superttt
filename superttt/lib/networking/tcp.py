@@ -14,9 +14,27 @@ from threading import Event as ThreadEvent
 
 from .message import Message, get_wrapped_size, replace_sender, unwrap, wrap
 from .room import uid_from_addr
-from .socketing import UNKNOWN_UID, IPv4Addr
+from .socketing import (
+        FACILITATOR_UID,
+        UNKNOWN_UID,
+        ClientClosed,
+        ConnectionClosed,
+        ConnectionOpened,
+        ExistingConnections,
+        IPv4Addr,
+        ms_since_epoch,
+)
 from .threading import ThreadScope
 
+
+def recv_all(connection: socket.socket) -> bytes | None:
+        header = connection.recv(6, socket.MSG_PEEK)
+        if len(header) == 0 or (size := get_wrapped_size(header)) is None:
+            raise ConnectionError
+        available = len(connection.recv(2048, socket.MSG_PEEK))
+        if available < size:
+            return None
+        return connection.recv(size)
 
 class TCPFacilitator(ThreadScope):
     """
@@ -25,16 +43,19 @@ class TCPFacilitator(ThreadScope):
     """
     BACKLOG = 5
 
-    def __init__(self, port: int, close_event: ThreadEvent):
+    def __init__(self, port: int, auth_comm: Queue[tuple[Message, int]], close_event: ThreadEvent, addr: str | None = None):
         super().__init__(close_event)
         self._socket: socket.socket # Server Socket
+
+        self._addr: str = "0.0.0.0" if addr is None else addr
         self._port = port
+        self._auth_comm: Queue[tuple[Message, int]] = auth_comm
         self._connections: list[socket.socket] = []
         self._uid: dict[socket.socket, int] = {}
 
     def _enter(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.bind(("0.0.0.0", self._port))
+        self._socket.bind((self._addr, self._port))
         self._socket.listen(TCPFacilitator.BACKLOG)
         self._socket.settimeout(0)
 
@@ -43,10 +64,11 @@ class TCPFacilitator(ThreadScope):
         if not self._connections:
             return
         self._recv_messages()
+        self._send_messages()
 
     def _exit(self):
         for connection in self._connections:
-            self._disconnect(connection)
+            self._disconnect(connection, alert=False)
         self._socket.close()
 
     def _recv_new_connections(self):
@@ -64,60 +86,60 @@ class TCPFacilitator(ThreadScope):
         rlist, _, _ = select.select(self._connections, (), (), 0.0)
         for connection in rlist:
             try:
-                try:
-                    header = connection.recv(6, socket.MSG_PEEK)
-                except ConnectionError as e:
-                    print(f"recv call for header failed with exception {e}")
-                    raise
-                if len(header) == 0:
-                    print("Header retrieved nothing so connection closed")
-                    raise ConnectionError
-                if (size := get_wrapped_size(header)) is None:
-                    print("Could not retrieve size from header")
-                    raise ConnectionError
-                try:
-                    msg = connection.recv(size)
-                except ConnectionError as e:
-                    print(f"recv call for msg body failed with exception {e}")
-                    raise
-                if len(msg) != size:
-                    print("Did not fully retrieve the msg in one call")
-                    raise ConnectionError
+                if (msg := recv_all(connection)) is None:
+                    continue
                 self._dispatch_message(replace_sender(msg, self._uid[connection]), connection)
             except ConnectionError:
                 print(f"failed to recv from <{connection.getpeername()}> disconnecting")
                 self._disconnect(connection, shutdown=False, alert=True)
 
-    def _connect(self, s: socket.socket, addr: IPv4Addr):
+    def _send_messages(self):
+        try:
+            while new := self._auth_comm.get_nowait():
+                msg = wrap(new[0], new[1], FACILITATOR_UID)
+                self._dispatch_message(msg, None)
+        except QueueEmptyError:
+            pass
+
+    def _connect(self, s: socket.socket, addr: IPv4Addr, alert: bool = True):
         s.settimeout(0)
         uid = uid_from_addr(addr)
 
+        msg = wrap(ExistingConnections(tuple(self._uid.values())), ms_since_epoch(), FACILITATOR_UID)
+        s.send(msg) # TODO: see if this size gets close to the buffer size (1024 - 2048 bytes)
+
         self._connections.append(s)
         self._uid[s] = uid
-        print(f"New connection <{uid}> <{addr}>")
 
-    def _disconnect(self, connection: socket.socket, shutdown: bool = True, alert: bool = True):
-        try:
-            self._connections.remove(connection)
-        except ValueError:
-            pass
-        self._uid.pop(connection, None)
-
-        if shutdown:
-            connection.shutdown(socket.SHUT_RDWR)
-            connection.close()
 
         if alert:
-            print("Connection closed but alerting other connections is not implemented.")
+            self._dispatch_message(wrap(ConnectionOpened(uid), ms_since_epoch(), FACILITATOR_UID), s)
+        print(f"New connection <{uid}> <{addr}>")
 
-    def _dispatch_message(self, msg: bytes, connection: socket.socket):
+    def _disconnect(self, s: socket.socket, shutdown: bool = True, alert: bool = True):
+        try:
+            self._connections.remove(s)
+        except ValueError:
+            pass
+        uid = self._uid.pop(s, None)
+
+        if shutdown and uid is not None:
+            s.shutdown(socket.SHUT_RDWR)
+            s.close()
+
+        if alert and uid is not None:
+            self._dispatch_message(wrap(ConnectionClosed(uid), ms_since_epoch(), FACILITATOR_UID), s)
+
+    def _dispatch_message(self, msg: bytes, connection: socket.socket | None):
         for other in self._connections[:]:
             if other == connection:
                 continue
             try:
+                # TODO: see if this size get's close to the buffer size (1024 - 2048 bytes)
                 other.send(msg)
             except BlockingIOError:
-                print(f"Failed to dispatch a message to <{self._uid[other]}>. I think this means the connection has closed?")
+                print(f"Failed to dispatch a message to <{self._uid[other]}>.")
+                self._disconnect(other, shutdown=False)
 
 class TCPClient(ThreadScope):
     CONNECTING_TIMEOUT = 0.5
@@ -172,6 +194,7 @@ class TCPClient(ThreadScope):
         self._send_messages()
 
     def _exit(self):
+        self._incoming.put_nowait((ClientClosed(), ms_since_epoch(), self._uid))
         if self._connection is None:
             return
         self._connection.shutdown(socket.SHUT_RDWR)
@@ -181,25 +204,8 @@ class TCPClient(ThreadScope):
         if self._connection is None:
             return
         try:
-            try:
-                header = self._connection.recv(6, socket.MSG_PEEK)
-            except ConnectionError as e:
-                print(f"recv call for header failed with exception {e}")
-                raise
-            if len(header) == 0:
-                print("Header retrieved nothing so connection closed")
-                raise ConnectionError
-            if (size := get_wrapped_size(header)) is None:
-                print("Could not retrieve size from header")
-                raise ConnectionError
-            try:
-                msg = self._connection.recv(size)
-            except ConnectionError as e:
-                print(f"recv call for msg body failed with exception {e}")
-                raise
-            if len(msg) != size:
-                print("Did not fully retrieve the msg in one call")
-                raise ConnectionError
+            if (msg := recv_all(self._connection)) is None:
+                return
             if (package := unwrap(msg)) is None:
                 print(f"Could not unwrap the message {msg}")
                 raise ConnectionError

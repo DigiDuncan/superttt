@@ -1,6 +1,9 @@
 import socket
 import urllib.request
+from dataclasses import dataclass
 from time import time_ns
+
+from .message import Message
 
 type IPv4Addr = tuple[str, int]
 
@@ -19,3 +22,22 @@ def ms_since_epoch() -> int:
 
 FACILITATOR_UID = 0x00  # The zero uid is reserved for the Facilitator
 UNKNOWN_UID = 0x01  # the one uid is reserved for Clients who don't know their uid
+
+
+@dataclass
+class ClientClosed(Message): ... # Used by client thread to tell application it has closed
+
+
+@dataclass
+class ExistingConnections(Message):
+    uids: tuple[int, ...]
+
+
+@dataclass
+class ConnectionOpened(Message):
+    uid: int
+
+
+@dataclass
+class ConnectionClosed(Message):
+    uid: int
