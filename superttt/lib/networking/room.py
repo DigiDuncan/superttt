@@ -36,5 +36,5 @@ def get_roomcode(addr: str, port: int, mapping: str = ROOM_CHR) -> str:
     return int_to_base(uid_from_addr((addr, port)), mapping)
 
 
-def get_addr(room: str, mapping: dict[str, int]) -> tuple[str, int]:
+def get_addr(room: str, mapping: dict[str, int] = ROOM_MAP) -> tuple[str, int]:
     return addr_from_uid(base_to_int(room, mapping))

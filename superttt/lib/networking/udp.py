@@ -10,7 +10,6 @@ establishes new connections in the `Facilitator`
 
 import select
 import socket
-from dataclasses import dataclass
 from queue import Empty as QueueEmptyError
 from queue import Queue
 from threading import Event as ThreadEvent
@@ -19,10 +18,6 @@ from .message import Message, get_wrapped_size, replace_sender, unwrap, wrap
 from .room import uid_from_addr
 from .socketing import UNKNOWN_UID, IPv4Addr, ms_since_epoch
 from .threading import ThreadScope
-
-
-@dataclass
-class EstablishConnectionMessage(Message): ...
 
 
 class UDPFacilitator(ThreadScope):
@@ -68,7 +63,6 @@ class UDPFacilitator(ThreadScope):
 
             self._connect(addr)
             msg = replace_sender(msg, self._uid[addr])
-            print(msg)
             self._dispatch_message(msg, addr)
             return True
         except BlockingIOError:

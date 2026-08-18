@@ -3,17 +3,16 @@ import sys
 import threading
 from dataclasses import dataclass
 
-from arcade import Sprite, SpriteList, View, Window, load_texture
-from pyglet.window import MouseCursor
+from arcade import Sprite, SpriteList, View, Window
 
 import superttt.lib.networking.message as msg
+import superttt.lib.networking.room as rm
 import superttt.lib.networking.socketing as sk
 from superttt.lib.networking import udp
 
 
 @dataclass
-class Ping(msg.Message):
-    ping_no: int
+class ALiveMessage(msg.Message): ...
 
 
 @dataclass
@@ -35,6 +34,8 @@ class CursorView(View):
         self._others: dict[int, Sprite] = {}
         self._cursors.append(self._cursor)
 
+        self._alive_timer: float = self.window.time
+
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
         self._cursor.left = x
         self._cursor.top = y
@@ -46,6 +47,10 @@ class CursorView(View):
         self._cursors.draw(pixelated=True)
 
     def on_update(self, delta_time: float) -> bool | None:
+        if self._alive_timer + 2 < self.window.time:
+            self.outgoing.put_nowait((ALiveMessage(), sk.ms_since_epoch()))
+            self._alive_timer = self.window.time
+
         try:
             while new := self.incoming.get_nowait():
                 msg, time, uid = new
@@ -91,10 +96,17 @@ def join(addr, port) -> tuple[threading.Event, queue.Queue, queue.Queue]:
 
 
 def main():
-    is_host = len(sys.argv) > 1
-    addr, port = sk.get_private_ipv4(), 10000
+    is_host = len(sys.argv) == 1
     if is_host:
+        addr, port = sk.get_private_ipv4(), 10000
         close_server = host(addr, port)
+        print(f"Hosting with room code <{rm.get_roomcode(addr, port)}>")
+    else:
+        try:
+            addr, port = rm.get_addr(sys.argv[1])
+        except ValueError:
+            print(f"Invalid room code <{sys.argv[1]}>")
+            sys.exit(1)
 
     close_client, inc, out = join(addr, port)
 
