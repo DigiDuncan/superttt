@@ -88,9 +88,10 @@ def join(addr, port) -> tuple[threading.Event, queue.Queue, queue.Queue]:
 def main():
     is_host = len(sys.argv) == 1
     if is_host:
-        addr, port = sk.get_private_ipv4(), 10000
-        close_server = host(addr, port)
-        print(f"Hosting <{addr, port}> with room code <{rm.get_roomcode(addr, port)}>")
+        host_addr, port = sk.get_public_ipv4(), 10000
+        addr = sk.get_private_ipv4()
+        close_server = host(host_addr, port)
+        print(f"Hosting <{host_addr, port}> with room code <{rm.get_roomcode(addr, port)}>")
     else:
         try:
             addr, port = rm.get_addr(sys.argv[1])
