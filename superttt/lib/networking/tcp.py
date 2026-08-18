@@ -64,14 +64,22 @@ class TCPFacilitator(ThreadScope):
         rlist, _, _ = select.select(self._connections, (), (), 0.0)
         for connection in rlist:
             try:
-                header = connection.recv(6, socket.MSG_PEEK)
+                try:
+                    header = connection.recv(6, socket.MSG_PEEK)
+                except ConnectionError as e:
+                    print(f"recv call for header failed with exception {e}")
+                    raise
                 if len(header) == 0:
                     print("Header retrieved nothing so connection closed")
                     raise ConnectionError
                 if (size := get_wrapped_size(header)) is None:
                     print("Could not retrieve size from header")
                     raise ConnectionError
-                msg = connection.recv(size)
+                try:
+                    msg = connection.recv(size)
+                except ConnectionError as e:
+                    print(f"recv call for msg body failed with exception {e}")
+                    raise
                 if len(msg) != size:
                     print("Did not fully retrieve the msg in one call")
                     raise ConnectionError
@@ -173,14 +181,22 @@ class TCPClient(ThreadScope):
         if self._connection is None:
             return
         try:
-            header = self._connection.recv(6, socket.MSG_PEEK)
+            try:
+                header = self._connection.recv(6, socket.MSG_PEEK)
+            except ConnectionError as e:
+                print(f"recv call for header failed with exception {e}")
+                raise
             if len(header) == 0:
                 print("Header retrieved nothing so connection closed")
                 raise ConnectionError
             if (size := get_wrapped_size(header)) is None:
                 print("Could not retrieve size from header")
                 raise ConnectionError
-            msg = self._connection.recv(size)
+            try:
+                msg = self._connection.recv(size)
+            except ConnectionError as e:
+                print(f"recv call for msg body failed with exception {e}")
+                raise
             if len(msg) != size:
                 print("Did not fully retrieve the msg in one call")
                 raise ConnectionError
