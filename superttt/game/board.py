@@ -3,6 +3,8 @@ from enum import StrEnum
 from functools import cache
 import math
 from itertools import batched
+from typing import Any, Sequence
+import json
 
 from superttt.lib.utils import flatten
 
@@ -11,7 +13,7 @@ class State(StrEnum):
     X = "X"
     O = "O"  # noqa: E741
 
-type Data = tuple[str | Data, ...]
+type Data = Sequence[str | Data]
 
 class Tile:
     def __init__(self, state: State | None = None, id: tuple[int, ...] | None = None) -> None:
@@ -126,15 +128,18 @@ class Board:
         return [t.id for t in board.items if t.state == State.NONE]  # type: ignore -- This should be a Board, I hope!!
 
     @classmethod
-    def from_data(cls, data: Data) -> Board:
-        b = Board()
-        for item in data:
-            if isinstance(item, tuple):
-                b.items.append(Board.from_data(item))
-            elif isinstance(item, str):
-                state = State.X if item == "X" else State.O if item == "O" else State.NONE
-                b.items.append(Tile(state))
-        return b
+    def from_data(cls, data: Data | str, id: tuple[int, ...] = tuple()) -> Board | Tile:
+        if isinstance(data, Sequence):
+            return Board([cls.from_data(board, (*id, idx)) for idx, board in enumerate(data)], id)
+        match data:
+            case "X":
+                return Tile(State.X, id)
+            case "O":
+                return Tile(State.O, id)
+        return Tile(State.NONE, id)
+
+    def to_JSON(self) -> Any:
+        print(json.dumps(self.data))
 
     def __str__(self) -> str:
         if self.type == Tile:
