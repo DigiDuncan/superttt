@@ -7,12 +7,16 @@ from arcade import Camera2D, Sprite, SpriteList, Text, View, XYWH, LBWH, draw_re
 import arcade.key
 
 from superttt.game import board
-from superttt.game.board import Board, State, Tile, create_board
+from superttt.game.board import State, Tile, create_board
 from superttt.game.drawing import draw_board_bg, draw_board_overlay, get_tile_from_position, TEXTURES, get_rect_from_coordinate, split_rect
 from superttt.game.game import Game
 from superttt.lib.utils import ease_color, format_time, ease_rect, ease
 from superttt.lib.gradient import draw_rect_gradient
 from .context import nav
+
+from logging import getLogger
+
+logger = getLogger("superttt")
 
 DEBUG_FONT = "GohuFont 11 Nerd Font Mono"
 GRADIENT = (arcade.color.LIGHT_CYAN, arcade.color.CYAN)
@@ -138,12 +142,35 @@ class GameView(View):
                     return
                 if tile.id not in self.next_moves:
                     return
-                tile.state = self.current_turn
-                self.latest_tile = tile
-                self.last_move_time = self.time_elapsed
-                self.next_moves = self.game.board.get_valid_moves_from_latest_move(self.latest_tile.id)
+                self.apply_move(tile)
+                self.send_move_message(tile.id)
+                self.send_turn_message()
                 self.current_turn = State.O if self.current_turn == State.X else State.X
-                self.game.update_state()
+
+    def send_turn_message(self):
+        ...
+        # Dragon, put some networking code here or something
+
+    def send_move_message(self, coord: tuple[int, ...]):
+        ...
+        # Dragon, put some networking code here or something
+
+    def apply_move(self, tile: Tile):
+        tile.state = self.current_turn
+        self.latest_tile = tile
+        self.last_move_time = self.time_elapsed
+        self.next_moves = self.game.board.get_valid_moves_from_latest_move(self.latest_tile.id)
+        self.game.update_state()
+
+    def on_remote_turn(self):
+        self.current_turn = State.O if self.current_turn == State.X else State.X
+
+    def on_remote_move(self, coord: tuple[int, ...]):
+        tile = self.game.board.get_item_from_id(coord)
+        if isinstance(tile, Tile):
+            self.apply_move(tile)
+        else:
+            logger.warning(f"Remote move not a tile: {coord}")
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
         if self.debug:
@@ -221,9 +248,9 @@ class GameView(View):
         self.clear()
         draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
         with self.camera.activate():
-            draw_board_bg(self.game.board, self.game.rect)
+            draw_board_bg(self.game.board, self.game.rect)  # TODO: laggy
             self.game.spritelist.draw()
-            draw_board_overlay(self.game.board, self.game.rect)
+            draw_board_overlay(self.game.board, self.game.rect)  # TODO: laggy
             self.draw_next_move_animation()
             if self.hover_id:
                 draw_texture_rect(TEXTURES["x"] if self.current_turn == State.X else TEXTURES["o"], get_rect_from_coordinate(self.hover_id, self.game.rect, self.grid_size), alpha = 127)

@@ -1,4 +1,5 @@
 Aria's favorite game!
+Dragon's favourite game!
 Some people call it Noughts and Crosses!
 I read a research paper for this!
 Made in Python!
