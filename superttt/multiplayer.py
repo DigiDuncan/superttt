@@ -7,8 +7,10 @@ their name.
 """
 from dataclasses import dataclass
 from queue import Empty, Queue
+from threading import Event as ThreadEvent
 
 from superttt.lib.networking.message import Message
+from superttt.lib.networking.room import get_addr, get_roomcode
 from superttt.lib.networking.socketing import (
     FACILITATOR_UID,
     MY_UID,
@@ -17,6 +19,8 @@ from superttt.lib.networking.socketing import (
     ConnectionClosed,
     ConnectionOpened,
     ExistingConnections,
+    get_private_ipv4,
+    get_public_ipv4,
     ms_since_epoch,
 )
 from superttt.lib.networking.tcp import TCPClient, TCPFacilitator
@@ -59,6 +63,8 @@ class MouseCursorMoved(Message):
     x: int
     y: int
 
+PORT = 25565
+
 class Multiplayer:
     """
     Global abstraction over Client and Facilitator. To ensure that threads get closed
@@ -68,17 +74,18 @@ class Multiplayer:
 
     def __init__(self):
         # -- GENERIC REUSABLE ATTRIBUTES --
-        self.client: TCPClient | None = None
-        self.facilitator: TCPFacilitator | None = None
-        self._is_hosting: bool = False
-        self._is_connected: bool = False
-
         self.incoming: Queue[tuple[Message, int, int]] = Queue()
         self.outgoing: Queue[tuple[Message, int]] = Queue()
         self.auth: Queue[tuple[Message, int]] = Queue()
 
+        self.client: TCPClient = TCPClient(("127.0.0.1", PORT), self.incoming, self.outgoing, ThreadEvent())
+        self.facilitator: TCPFacilitator = TCPFacilitator(PORT, self.auth, ThreadEvent())
+        self._is_hosting: bool = False
+        self._is_connected: bool = False
+
         # -- SUPERTTT SPECIFIC ATTRIBUTES --
         self.name: str | None = None
+        self.room: str | None = None
         self.uid: int | None = None
         self.host: int = UNKNOWN_UID # Who has the authority to send certain messages
         self.player1: int = UNKNOWN_UID
@@ -132,7 +139,7 @@ class Multiplayer:
                     if uid != MY_UID:
                         continue
                     self._processed.put_nowait(incoming)
-                    # TODO what do we do here?
+                    self.disconnect()
                 case ExistingConnections():
                     if not self.has_auth(uid):
                         continue
@@ -186,12 +193,66 @@ class Multiplayer:
                     if self.has_auth(uid):
                         self._processed.put_nowait(incoming)
 
+    def _reset(self):
+        clear_queue(self.incoming)
+        clear_queue(self.outgoing)
+        clear_queue(self._processed)
+        self.room: str | None = None
+        self.uid: int | None = None
+        self.host: int = UNKNOWN_UID
+        self.player1: int = UNKNOWN_UID
+        self.player2: int = UNKNOWN_UID
+        self.connecting.clear()
+        self.connections.clear()
+
+    def start_hosting(self, name: str, is_local: bool):
+        if self._is_hosting or self.facilitator.is_alive():
+            self.disconnect()
+
+        # A local client must use the private ip address even for a public facing host
+        # Only get_public_ipv4 is blocking and 'expensive'
+        local_room = get_roomcode(get_private_ipv4(), PORT)
+        room = local_room if is_local else get_roomcode(get_public_ipv4(), PORT)
+        addr = get_private_ipv4() if is_local else None
+
+        self.facilitator.reset()
+        clear_queue(self.auth)
+        self.facilitator.update_addr(addr)
+        self.facilitator.update_port(PORT)
+        self.facilitator.start()
+
+        self.connect(name, local_room)
+
+        self.room = room # The room the local client uses can diverge from the actual room code
+        self._is_hosting = True
 
     def connect(self, name: str, room: str):
+        if self._is_connected or self.client.is_alive():
+            self.disconnect()
         self.name = name
 
+        self.client.reset()
+        self._reset()
+        self.client.update_addr(get_addr(room))
+        self.client.start()
+        self.room = room
+        self._is_connected = True
+        self.process()
+
     def disconnect(self):
-        pass
+        if not self._is_connected:
+            return
+        self.client.stop()
+        self.client.watch()
+        self._reset()
+
+        if self._is_hosting:
+            self.facilitator.stop()
+            self.facilitator.watch()
+            clear_queue(self.auth)
+
+        self._is_connected = False
+        self._is_hosting = False
 
     def is_player1(self, uid: int | None = None) -> bool:
         if uid is None:
