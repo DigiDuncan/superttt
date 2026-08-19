@@ -49,8 +49,8 @@ class ThreadScope:
         return self._has_started
 
     def start(self) -> bool:
-        if self._thread.is_alive() or self._has_started:
-            # TODO: logging "This thread is currently alive and must be restarted."
+        if self._has_started or self._thread.is_alive():
+            # TODO: logging "This thread has been started and must be reset."
             return False
         self._has_started = True
         self._thread.start()

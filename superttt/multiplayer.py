@@ -65,10 +65,10 @@ class MouseCursorMoved(Message):
 
 PORT = 25565
 
-class Multiplayer:
+class _Multiplayer:
     """
     Global abstraction over Client and Facilitator. To ensure that threads get closed
-    and opened properly. We used the ThreadScope's Restart functionality so we keep the
+    and opened properly. We used the ThreadScope's `Reset` functionality so we keep the
     same Client, Facilitator, and Queues (and close_events but we just use `ThreadScope.close()`)
     """
 
@@ -276,3 +276,5 @@ class Multiplayer:
         if uid is None:
             return self._is_hosting
         return uid == self.host
+
+Multiplayer = _Multiplayer()
