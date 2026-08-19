@@ -16,7 +16,15 @@ from threading import Event as ThreadEvent
 
 from .message import Message, get_wrapped_size, replace_sender, unwrap, wrap
 from .room import uid_from_addr
-from .socketing import FACILITATOR_UID, UNKNOWN_UID, ConnectionClosed, IPv4Addr, ms_since_epoch
+from .socketing import (
+    FACILITATOR_UID,
+    UNKNOWN_UID,
+    ConnectionClosed,
+    ConnectionOpened,
+    ExistingConnections,
+    IPv4Addr,
+    ms_since_epoch,
+)
 from .threading import ThreadScope
 
 
@@ -84,16 +92,22 @@ class UDPFacilitator(ThreadScope):
             pass
 
 
-    def _connect(self, addr: IPv4Addr):
+    def _connect(self, addr: IPv4Addr, alert: bool = True):
         if addr in self._uid:
             self._timeout[addr] = ms_since_epoch()
             return
 
         uid = uid_from_addr(addr)
-        print(f"New connection <{uid}> <{addr}>")
+        msg = wrap(ExistingConnections(uid, tuple(self._uid.values())), ms_since_epoch(), FACILITATOR_UID)
+        self._socket.sendto(msg, addr) # TODO: see if this size gets close to the buffer size (1024 - 2048 bytes)
+
         self._connections.append(addr)
         self._uid[addr] = uid
         self._timeout[addr] = ms_since_epoch()
+
+        if alert:
+            self._dispatch_message(wrap(ConnectionOpened(uid), ms_since_epoch(), FACILITATOR_UID), addr)
+        print(f"New connection <{uid}> <{addr}>")
 
     def _disconnect(self, addr: IPv4Addr, alert: bool = True):
         if addr not in self._uid:

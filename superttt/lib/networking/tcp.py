@@ -106,12 +106,11 @@ class TCPFacilitator(ThreadScope):
         s.settimeout(0)
         uid = uid_from_addr(addr)
 
-        msg = wrap(ExistingConnections(tuple(self._uid.values())), ms_since_epoch(), FACILITATOR_UID)
+        msg = wrap(ExistingConnections(uid, tuple(self._uid.values())), ms_since_epoch(), FACILITATOR_UID)
         s.send(msg) # TODO: see if this size gets close to the buffer size (1024 - 2048 bytes)
 
         self._connections.append(s)
         self._uid[s] = uid
-
 
         if alert:
             self._dispatch_message(wrap(ConnectionOpened(uid), ms_since_epoch(), FACILITATOR_UID), s)
