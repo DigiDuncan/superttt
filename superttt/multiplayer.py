@@ -13,6 +13,7 @@ from superttt.lib.networking.socketing import (
     FACILITATOR_UID,
     MY_UID,
     UNKNOWN_UID,
+    ClientClosed,
     ConnectionClosed,
     ConnectionOpened,
     ExistingConnections,
@@ -67,10 +68,10 @@ class Multiplayer:
 
     def __init__(self):
         # -- GENERIC REUSABLE ATTRIBUTES --
-        self.client: TCPClient
+        self.client: TCPClient | None = None
         self.facilitator: TCPFacilitator | None = None
-        self.is_hosting: bool = False
-        self.is_connected: bool = False
+        self._is_hosting: bool = False
+        self._is_connected: bool = False
 
         self.incoming: Queue[tuple[Message, int, int]] = Queue()
         self.outgoing: Queue[tuple[Message, int]] = Queue()
@@ -80,8 +81,8 @@ class Multiplayer:
         self.name: str | None = None
         self.uid: int | None = None
         self.host: int = UNKNOWN_UID # Who has the authority to send certain messages
-        self.player1: int = MY_UID
-        self.player2: int = MY_UID
+        self.player1: int = UNKNOWN_UID
+        self.player2: int = UNKNOWN_UID
         self.connecting: list[int] = [] # Who have we been told is connecting, but has no name?
         self.connections: dict[int, str] = {} # Who has connected and given us their name
 
@@ -94,7 +95,7 @@ class Multiplayer:
         self.outgoing.put_nowait((msg, ms_since_epoch() if time is None else time))
 
     def send_auth_msg(self, msg: Message, time: int | None = None):
-        if not self.is_hosting:
+        if not self._is_hosting:
             return # You can try, but if you aren't the host you have no facilitator to send too
         self.auth.put_nowait((msg, ms_since_epoch() if time is None else time))
 
@@ -127,10 +128,16 @@ class Multiplayer:
         for incoming in QueueIter(self.incoming):
             msg, _, uid = incoming
             match msg:
+                case ClientClosed():
+                    if uid != MY_UID:
+                        continue
+                    self._processed.put_nowait(incoming)
+                    # TODO what do we do here?
                 case ExistingConnections():
                     if not self.has_auth(uid):
                         continue
                     self._processed.put_nowait(incoming)
+                    self.uid = msg.uid
                     for connection in msg.uids:
                         if connection in self.connections or connection in self.connecting:
                             continue
@@ -172,22 +179,39 @@ class Multiplayer:
                         self._processed.put_nowait(incoming)
                         self.disconnect()
                         return
+                case SetTile():
+                    if self.has_auth(uid):
+                        self._processed.put_nowait(incoming)
+                case SetTurn():
+                    if self.has_auth(uid):
+                        self._processed.put_nowait(incoming)
 
 
     def connect(self, name: str, room: str):
-        pass
+        self.name = name
 
     def disconnect(self):
         pass
 
-    def is_player1(self, uid: int) -> bool:
+    def is_player1(self, uid: int | None = None) -> bool:
+        if uid is None:
+            return self.player1 == MY_UID or self.player1 == self.uid
         return uid == self.player1
 
-    def is_player2(self, uid: int) -> bool:
+    def is_player2(self, uid: int | None = None) -> bool:
+        if uid is None:
+            return self.player2 == MY_UID or self.player2 == self.uid
         return uid == self.player2
 
-    def is_spectator(self, uid: int) -> bool:
+    def is_spectator(self, uid: int | None = None) -> bool:
         return uid != self.player1 and uid != self.player2
 
-    def has_connected(self, uid: int) -> bool:
+    def is_connected(self, uid: int | None) -> bool:
+        if uid is None:
+            return self._is_connected
         return uid in self.connections
+
+    def is_host(self, uid: int | None = None) -> bool:
+        if uid is None:
+            return self._is_hosting
+        return uid == self.host
