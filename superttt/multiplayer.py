@@ -13,6 +13,9 @@ from superttt.lib.networking.socketing import (
     FACILITATOR_UID,
     MY_UID,
     UNKNOWN_UID,
+    ConnectionClosed,
+    ConnectionOpened,
+    ExistingConnections,
     QueueIter,
     ms_since_epoch,
 )
@@ -33,7 +36,7 @@ class SetPlayer(Message):
     is_player1: bool # Is the player player 1 or 2?
 
 @dataclass
-class SetPlayerName(Message): # The name is assigned with the uid of the sender
+class SetName(Message): # The name is assigned with the uid of the sender
     name: str
 
 # Non-host sends these, which the handle picks up and decides if it's valid
@@ -52,7 +55,8 @@ class SetTurn(Message):
 
 @dataclass
 class MouseCursorMoved(Message):
-    pass
+    x: int
+    y: int
 
 class Multiplayer:
     """
@@ -65,23 +69,24 @@ class Multiplayer:
         # -- GENERIC REUSABLE ATTRIBUTES --
         self.client: TCPClient
         self.facilitator: TCPFacilitator | None = None
-        self.hosting: bool = False
+        self.is_hosting: bool = False
+        self.is_connected: bool = False
 
-        self.incoming: Queue[tuple[Message, int, int]]
-        self.outgoing: Queue[tuple[Message, int]]
-        self.auth: Queue[tuple[Message, int]]
+        self.incoming: Queue[tuple[Message, int, int]] = Queue()
+        self.outgoing: Queue[tuple[Message, int]] = Queue()
+        self.auth: Queue[tuple[Message, int]] = Queue()
 
         # -- SUPERTTT SPECIFIC ATTRIBUTES --
         self.name: str | None = None
+        self.uid: int | None = None
         self.host: int = UNKNOWN_UID # Who has the authority to send certain messages
         self.player1: int = MY_UID
         self.player2: int = MY_UID
         self.connecting: list[int] = [] # Who have we been told is connecting, but has no name?
-        self.connected: dict[int, str] = {} # Who has connected and given us their name
+        self.connections: dict[int, str] = {} # Who has connected and given us their name
 
         # * Because we have a `process` method we want to look at every message coming through
-        # before
-        self._processed: Queue[tuple[Message, int, int]]
+        self._processed: Queue[tuple[Message, int, int]] = Queue()
 
     # -- GENERIC REUSABLE METHODS --
 
@@ -89,7 +94,7 @@ class Multiplayer:
         self.outgoing.put_nowait((msg, ms_since_epoch() if time is None else time))
 
     def send_auth_msg(self, msg: Message, time: int | None = None):
-        if not self.hosting:
+        if not self.is_hosting:
             return # You can try, but if you aren't the host you have no facilitator to send too
         self.auth.put_nowait((msg, ms_since_epoch() if time is None else time))
 
@@ -119,9 +124,70 @@ class Multiplayer:
         """
         We have custom behaviour which need to done as regularly as possible.
         """
+        for incoming in QueueIter(self.incoming):
+            msg, _, uid = incoming
+            match msg:
+                case ExistingConnections():
+                    if not self.has_auth(uid):
+                        continue
+                    self._processed.put_nowait(incoming)
+                    for connection in msg.uids:
+                        if connection in self.connections or connection in self.connecting:
+                            continue
+                        self.connecting.append(connection)
+                case ConnectionOpened():
+                    if not self.has_auth(uid):
+                        continue
+                    self._processed.put_nowait(incoming)
+                    if msg.uid in self.connections or msg in self.connecting:
+                        continue
+                    self.connecting.append(msg.uid)
+                case ConnectionClosed():
+                    if not self.has_auth(uid):
+                        continue
+                    self._processed.put_nowait(incoming)
+                    if msg.uid in self.connecting:
+                        self.connecting.remove(msg.uid)
+                    self.connections.pop(msg.uid, None)
+                case SetName():
+                    self._processed.put_nowait(incoming)
+                    if uid in self.connecting:
+                        self.connecting.remove(uid)
+                    self.connections[uid] = msg.name
+                case SetHost():
+                    if not self.has_auth(uid):
+                        continue
+                    self._processed.put_nowait(incoming)
+                    self.host = uid
+                case SetPlayer():
+                    if not self.has_auth(uid):
+                        continue
+                    self._processed.put_nowait(incoming)
+                    if msg.is_player1:
+                        self.player1 = msg.player
+                    else:
+                        self.player2 = msg.player
+                case Kick():
+                    if self.has_auth(uid) or msg.uid == self.uid:
+                        self._processed.put_nowait(incoming)
+                        self.disconnect()
+                        return
+
 
     def connect(self, name: str, room: str):
         pass
 
     def disconnect(self):
         pass
+
+    def is_player1(self, uid: int) -> bool:
+        return uid == self.player1
+
+    def is_player2(self, uid: int) -> bool:
+        return uid == self.player2
+
+    def is_spectator(self, uid: int) -> bool:
+        return uid != self.player1 and uid != self.player2
+
+    def has_connected(self, uid: int) -> bool:
+        return uid in self.connections
