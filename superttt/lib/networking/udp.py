@@ -26,24 +26,26 @@ class UDPFacilitator(ThreadScope):
     def __init__(self, port: int, auth_comm: Queue[tuple[Message, int]], close_event: ThreadEvent, addr: str | None = None) -> None:
         super().__init__(close_event)
         self._socket: socket.socket
+
         self._addr: str = "0.0.0.0" if addr is None else addr
         self._port = port
         self._auth_comm: Queue[tuple[Message, int]] = auth_comm
         self._connections: list[IPv4Addr] = []
         self._uid: dict[IPv4Addr, int] = {}
+
         self._timeout: dict[IPv4Addr, int] = {}
 
     def _enter(self):
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind((self._addr, self._port))
         self._socket.settimeout(0.0)
-        print("Started Facilitator")
 
     def _run(self):
         rcvd = self._recv_messages()
         while not rcvd:
             rcvd = self._recv_messages()
         self._clear_stale()
+        self._send_messages()
 
     def _exit(self):
         self._socket.shutdown(socket.SHUT_RDWR)
