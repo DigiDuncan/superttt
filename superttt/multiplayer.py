@@ -6,8 +6,17 @@ and who player2 is, and that they are the host, and every client will tell every
 their name.
 """
 from dataclasses import dataclass
+from queue import Empty, Queue
 
 from superttt.lib.networking.message import Message
+from superttt.lib.networking.socketing import (
+    FACILITATOR_UID,
+    MY_UID,
+    UNKNOWN_UID,
+    QueueIter,
+    ms_since_epoch,
+)
+from superttt.lib.networking.tcp import TCPClient, TCPFacilitator
 
 
 @dataclass
@@ -15,45 +24,104 @@ class SetHost(Message):
     uid: int # Tell other clients who the host is
 
 @dataclass
+class Kick(Message):
+    uid: int # Tell other clients to kick uid. Only the Host or Facilitator can send this msg
+
+@dataclass
 class SetPlayer(Message):
     player: int # Player's networking UID
     is_player1: bool # Is the player player 1 or 2?
 
-# TODO: Do we want names?
 @dataclass
 class SetPlayerName(Message): # The name is assigned with the uid of the sender
     name: str
 
+# Non-host sends these, which the handle picks up and decides if it's valid
+@dataclass
+class AttemptSetTile(Message):
+    location: tuple[int, ...]
+
+# Host sends these either on their turn or after the other player has tried to set a tile
 @dataclass
 class SetTile(Message):
     location: tuple[int, ...]
-
 
 @dataclass
 class SetTurn(Message):
     turn: int
 
+@dataclass
+class MouseCursorMoved(Message):
+    pass
 
-class Connection:
+class Multiplayer:
     """
-    Abstraction over Client, Facilitator.
+    Global abstraction over Client and Facilitator. To ensure that threads get closed
+    and opened properly. We used the ThreadScope's Restart functionality so we keep the
+    same Client, Facilitator, and Queues (and close_events but we just use `ThreadScope.close()`)
     """
 
-    def send_msg(self):
-        pass
+    def __init__(self):
+        # -- GENERIC REUSABLE ATTRIBUTES --
+        self.client: TCPClient
+        self.facilitator: TCPFacilitator | None = None
+        self.hosting: bool = False
 
-    def send_auth_msg(self):
-        pass
+        self.incoming: Queue[tuple[Message, int, int]]
+        self.outgoing: Queue[tuple[Message, int]]
+        self.auth: Queue[tuple[Message, int]]
 
-    # TODO: return an Iterable which handles fetching from a queue until it is empty
-    def msgs(self):
-        pass
+        # -- SUPERTTT SPECIFIC ATTRIBUTES --
+        self.name: str | None = None
+        self.host: int = UNKNOWN_UID # Who has the authority to send certain messages
+        self.player1: int = MY_UID
+        self.player2: int = MY_UID
+        self.connecting: list[int] = [] # Who have we been told is connecting, but has no name?
+        self.connected: dict[int, str] = {} # Who has connected and given us their name
 
-    def connect(self):
+        # * Because we have a `process` method we want to look at every message coming through
+        # before
+        self._processed: Queue[tuple[Message, int, int]]
+
+    # -- GENERIC REUSABLE METHODS --
+
+    def send_msg(self, msg: Message, time: int | None = None):
+        self.outgoing.put_nowait((msg, ms_since_epoch() if time is None else time))
+
+    def send_auth_msg(self, msg: Message, time: int | None = None):
+        if not self.hosting:
+            return # You can try, but if you aren't the host you have no facilitator to send too
+        self.auth.put_nowait((msg, ms_since_epoch() if time is None else time))
+
+    def get_msg(self) -> tuple[Message, int, int] | None:
+        try:
+            # * This is SuperTTT specific
+            return self._processed.get_nowait()
+        except Empty:
+            return None
+
+    def get_all_msgs(self) -> QueueIter[tuple[Message, int, int]]:
+            # * This is SuperTTT specific
+        return QueueIter(self._processed)
+
+    # -- SUPERTTT SPECIFIC* METHODS ---
+    # * a generic connect/disconnect could be made, but we do special stuff with names in superttt
+
+    def has_auth(self, uid: int) -> bool:
+        """
+        Does the provided uid have authority
+        """
+        if uid == UNKNOWN_UID:
+            return False
+        return uid == FACILITATOR_UID or uid == self.host
+
+    def process(self):
+        """
+        We have custom behaviour which need to done as regularly as possible.
+        """
+
+    def connect(self, name: str, room: str):
         pass
 
     def disconnect(self):
-        pass
-
-    def reconnect(self):
         pass

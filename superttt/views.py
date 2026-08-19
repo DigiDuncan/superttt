@@ -202,11 +202,13 @@ class SettingsView(View):
         if self.hovering_caution:
             self.caution_text.draw()
 
-class LobbyView(View):
+class HostView(View):
 
     def __init__(self, is_local: bool) -> None:
         super().__init__()
         self.is_local: bool = is_local
+        # TODO: text input for name
+        # TODO: Marker for who is Player1, Player2, and Host
 
         # TODO: Setup a Facilitator and local Client
         # TODO: Get own uid, set myself as player1
@@ -215,6 +217,14 @@ class LobbyView(View):
         # TODO: remember player2 and spectators
         # TODO: add ability to swap which player is which
 
+class JoinView(View):
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        # TODO: text input for room code
+        # TODO: text input for name
+        # TODO: Marker for who is Player1, Player2, and Host
 
 
 class ModeView(View):
