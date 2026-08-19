@@ -32,6 +32,7 @@ class ClientClosed(Message): ... # Used by client thread to tell application it 
 
 @dataclass
 class ExistingConnections(Message):
+    uid: int # Your uid
     uids: tuple[int, ...]
 
 
