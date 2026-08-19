@@ -43,7 +43,7 @@ class CursorView(View):
     def on_update(self, delta_time: float) -> bool | None:
         try:
             while new := self.incoming.get_nowait():
-                msg, time, uid = new
+                msg, _, uid = new
 
                 match msg:
                     case CursorMovedMessage():
@@ -92,7 +92,7 @@ def join(addr, port) -> tuple[threading.Event, queue.Queue, queue.Queue]:
 
     incoming = queue.Queue()
     outgoing = queue.Queue()
-    client = tcp.TCPClient("Host", (addr, port), incoming, outgoing, close_client)
+    client = tcp.TCPClient((addr, port), incoming, outgoing, close_client)
 
     client.start()
 

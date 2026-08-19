@@ -3,14 +3,16 @@ Transmission Control Protocol (TCP) uses a fundamentally different system from
 User Datagram Protocol (UDP). In TCP sockets have connections which get formed when
 a client connects to a server socket. The server then makes a new client socket so
 the two clients have a direct connection. To avoid every user having a forwarded port
-the host create's a `Lighthouse` which holds the server socket and outputs client
-sockets for the `Facilitator`.
+the host creates a 'Facilitator' which creates and handles client sockets. It passes
+all messages it receives to all other clients. It marks who they came from before
+sending them on.
 """
 import select
 import socket
 from queue import Empty as QueueEmptyError
 from queue import Queue
 from threading import Event as ThreadEvent
+from threading import Lock
 
 from .message import Message, get_wrapped_size, replace_sender, unwrap, wrap
 from .room import uid_from_addr
@@ -54,11 +56,28 @@ class TCPFacilitator(ThreadScope):
         self._connections: list[socket.socket] = []
         self._uid: dict[socket.socket, int] = {}
 
+        self._mutex: Lock = Lock()
+
+    def update_addr(self, addr: str | None = None) -> bool:
+        if self._thread.is_alive():
+            return False
+        with self._mutex:
+            self._addr = "0.0.0.0" if addr is None else addr
+        return True
+
+    def update_port(self, port: int):
+        if self._thread.is_alive():
+            return False
+        with self._mutex:
+            self._port = port
+        return True
+
     def _enter(self):
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.bind((self._addr, self._port))
-        self._socket.listen(TCPFacilitator.BACKLOG)
-        self._socket.settimeout(0)
+        with self._mutex:
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._socket.bind((self._addr, self._port))
+            self._socket.listen(TCPFacilitator.BACKLOG)
+            self._socket.settimeout(0)
 
     def _run(self):
         self._recv_new_connections()
@@ -107,7 +126,7 @@ class TCPFacilitator(ThreadScope):
         uid = uid_from_addr(addr)
 
         msg = wrap(ExistingConnections(uid, tuple(self._uid.values())), ms_since_epoch(), FACILITATOR_UID)
-        s.send(msg) # TODO: see if this size gets close to the buffer size (1024 - 2048 bytes)
+        s.sendall(msg)
 
         self._connections.append(s)
         self._uid[s] = uid
@@ -135,8 +154,7 @@ class TCPFacilitator(ThreadScope):
             if other == connection:
                 continue
             try:
-                # TODO: see if this size get's close to the buffer size (1024 - 2048 bytes)
-                other.send(msg)
+                other.sendall(msg)
             except BlockingIOError:
                 print(f"Failed to dispatch a message to <{self._uid[other]}>.")
                 self._disconnect(other, shutdown=False)
@@ -148,45 +166,53 @@ class TCPClient(ThreadScope):
 
     def __init__(
         self,
-        name: str,
-        addr: tuple[str, int],
+        addr: IPv4Addr,
         incoming: Queue[tuple[Message, int, int]],
         outgoing: Queue[tuple[Message, int]],
         close_event: ThreadEvent,
     ) -> None:
-        super().__init__(close_event, f"{name} Client")
+        super().__init__(close_event)
         self._connection: socket.socket | None = None
         self._incoming: Queue[tuple[Message, int, int]] = incoming
         self._outgoing: Queue[tuple[Message, int]] = outgoing
-        self._client_name: str = name
-        self._addr: tuple[str, int] = addr
+        self._addr: IPv4Addr = addr
+
+        self._mutex: Lock = Lock()
+
+    def update_addr(self, addr: IPv4Addr) -> bool:
+        if self._thread.is_alive():
+            return False
+        with self._mutex:
+            self._addr = addr
+        return True
 
     def _enter(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        attempts = 1
-        accumulated = 0.0
-        while accumulated < TCPClient.CONNECTING_MAX:
-            duration = attempts * TCPClient.CONNECTING_TIMEOUT
-            try:
-                s.settimeout(duration)
-                s.connect(self._addr)
-            except TimeoutError:
-                accumulated += duration
-                attempts += 1
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            except OSError as e:
-                print(f"Encountered exception {e} while attempting to connect")
-                self._close_event.set()
-                break
+        with self._mutex:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            attempts = 1
+            accumulated = 0.0
+            while accumulated < TCPClient.CONNECTING_MAX:
+                duration = attempts * TCPClient.CONNECTING_TIMEOUT
+                try:
+                    s.settimeout(duration)
+                    s.connect(self._addr)
+                except TimeoutError:
+                    accumulated += duration
+                    attempts += 1
+                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                except OSError as e:
+                    print(f"Encountered exception {e} while attempting to connect")
+                    self._close_event.set()
+                    break
+                else:
+                    print("found connection")
+                    self._connection = s
+                    s.settimeout(TCPClient.MESSAGE_TIMEOUT)
+                    break
             else:
-                print("found connection")
-                self._connection = s
-                s.settimeout(TCPClient.MESSAGE_TIMEOUT)
-                break
-        else:
-            print(f"Failed to find connection after {accumulated}s and {attempts} attempts")
-            self._close_event.set()
-            return
+                print(f"Failed to find connection after {accumulated}s and {attempts} attempts")
+                self._close_event.set()
+                return
 
     def _run(self):
         self._recv_messages()
@@ -221,7 +247,7 @@ class TCPClient(ThreadScope):
         try:
             while msg_time := self._outgoing.get_nowait():
                 data = wrap(msg_time[0], msg_time[1], UNKNOWN_UID)
-                sent = self._connection.send(data)
+                sent = self._connection.sendall(data)
                 if sent == 0:
                     raise ConnectionError
         except ConnectionError:
