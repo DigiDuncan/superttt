@@ -16,6 +16,7 @@ from .message import Message, get_wrapped_size, replace_sender, unwrap, wrap
 from .room import uid_from_addr
 from .socketing import (
         FACILITATOR_UID,
+        MY_UID,
         UNKNOWN_UID,
         ClientClosed,
         ConnectionClosed,
@@ -160,7 +161,6 @@ class TCPClient(ThreadScope):
         self._outgoing: Queue[tuple[Message, int]] = outgoing
         self._client_name: str = name
         self._addr: tuple[str, int] = addr
-        self._uid: int = UNKNOWN_UID
 
     def _enter(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -194,7 +194,7 @@ class TCPClient(ThreadScope):
         self._send_messages()
 
     def _exit(self):
-        self._incoming.put_nowait((ClientClosed(), ms_since_epoch(), self._uid))
+        self._incoming.put_nowait((ClientClosed(), ms_since_epoch(), MY_UID))
         if self._connection is None:
             return
         self._connection.shutdown(socket.SHUT_RDWR)
@@ -221,7 +221,7 @@ class TCPClient(ThreadScope):
             return
         try:
             while msg_time := self._outgoing.get_nowait():
-                data = wrap(msg_time[0], msg_time[1], self._uid)
+                data = wrap(msg_time[0], msg_time[1], UNKNOWN_UID)
                 sent = self._connection.send(data)
                 if sent == 0:
                     raise ConnectionError
