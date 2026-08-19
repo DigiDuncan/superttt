@@ -17,10 +17,10 @@ from superttt.lib.networking.socketing import (
     ConnectionClosed,
     ConnectionOpened,
     ExistingConnections,
-    QueueIter,
     ms_since_epoch,
 )
 from superttt.lib.networking.tcp import TCPClient, TCPFacilitator
+from superttt.lib.networking.threading import QueueIter, clear_queue
 
 
 @dataclass

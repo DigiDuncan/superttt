@@ -1,6 +1,5 @@
-from queue import Empty, Queue
+
 import socket
-from typing import Iterable, Self
 import urllib.request
 from dataclasses import dataclass
 from time import time_ns
@@ -44,17 +43,3 @@ class ConnectionOpened(Message):
 @dataclass
 class ConnectionClosed(Message):
     uid: int
-
-class QueueIter[T](Iterable[T]):
-
-    def __init__(self, queue: Queue[T]) -> None:
-        self.q = queue
-
-    def __iter__(self) -> Self:
-        return self
-
-    def __next__(self) -> T:
-        try:
-            return self.q.get_nowait()
-        except Empty:
-            raise StopIteration

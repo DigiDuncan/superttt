@@ -1,6 +1,27 @@
+from collections.abc import Iterable
+from queue import Empty, Queue
 from threading import Event as ThreadEvent
 from threading import Thread
+from typing import Self
 
+
+def clear_queue[T](queue: Queue[T]) -> tuple[T, ...]:
+    # ! WARNING IF THE QUEUE IS BEING ACTIVELY FILLED THIS WILL EITHER BLOCK OR BE INEFFECTIVE
+    return tuple(QueueIter(queue))
+
+class QueueIter[T](Iterable[T]):
+
+    def __init__(self, queue: Queue[T]) -> None:
+        self.q = queue
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> T:
+        try:
+            return self.q.get_nowait()
+        except Empty:
+            raise StopIteration
 
 class ThreadScope:
     """
@@ -19,9 +40,12 @@ class ThreadScope:
         return self._thread.join(timeout)
 
     def is_alive(self) -> bool:
+        # is_alive tracks the status of the actual thread
         return self._thread.is_alive()
 
     def has_started(self) -> bool:
+        # has_started tracks whether the thread has started
+        # i.e. you can't call thread.start() again.
         return self._has_started
 
     def start(self) -> bool:
@@ -38,9 +62,8 @@ class ThreadScope:
         self._close_event.set()
         return True
 
-    def restart(self) -> bool:
+    def reset(self) -> bool:
         if not self._has_started:
-            # TODO: "Thread has never been started use `ThreadScope.start()`."
             return False
 
         if self._thread.is_alive():
