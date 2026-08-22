@@ -32,6 +32,12 @@ class SetHost(Message):
     uid: int # Tell other clients who the host is
 
 @dataclass
+class SetBoard(Message):
+    size: int
+    depth: int
+    easy: bool
+
+@dataclass
 class Kick(Message):
     uid: int # Tell other clients to kick uid. Only the Host or Facilitator can send this msg
 
@@ -145,6 +151,7 @@ class _Multiplayer:
                         continue
                     self._processed.put_nowait(incoming)
                     self.uid = msg.uid
+                    self.connections[msg.uid] = self.name or "Me"
                     for connection in msg.uids:
                         if connection in self.connections or connection in self.connecting:
                             continue
@@ -173,6 +180,10 @@ class _Multiplayer:
                         continue
                     self._processed.put_nowait(incoming)
                     self.host = uid
+                case SetBoard():
+                    if not self.has_auth(uid):
+                        continue
+                    self._processed.put_nowait(incoming)
                 case SetPlayer():
                     if not self.has_auth(uid):
                         continue
@@ -212,12 +223,12 @@ class _Multiplayer:
         # A local client must use the private ip address even for a public facing host
         # Only get_public_ipv4 is blocking and 'expensive'
         local_room = get_roomcode(get_private_ipv4(), PORT)
-        room = local_room if is_local else get_roomcode(get_public_ipv4(), PORT)
-        addr = get_private_ipv4() if is_local else None
+        addr = get_private_ipv4() if is_local else get_public_ipv4()
+        room = get_roomcode(addr, PORT)
 
         self.facilitator.reset()
         clear_queue(self.auth)
-        self.facilitator.update_addr(addr)
+        self.facilitator.update_addr("0.0.0.0")
         self.facilitator.update_port(PORT)
         self.facilitator.start()
 
@@ -247,6 +258,7 @@ class _Multiplayer:
         self._reset()
 
         if self._is_hosting:
+            print("Ending Hosting")
             self.facilitator.stop()
             self.facilitator.watch()
             clear_queue(self.auth)
@@ -277,4 +289,11 @@ class _Multiplayer:
             return self._is_hosting
         return uid == self.host
 
-Multiplayer = _Multiplayer()
+    def set_name(self, name: str):
+        self.outgoing.put_nowait((SetName(name), ms_since_epoch()))
+        self.name = name
+        if self.uid is not None:
+            self.connections[self.uid] = name
+
+
+multiplayer = _Multiplayer()

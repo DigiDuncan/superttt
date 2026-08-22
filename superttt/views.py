@@ -1,11 +1,15 @@
 import random
 
 import arcade.key
-from arcade import LRBT, Rect, Sprite, SpriteList, Text, View
+from arcade import LBWH, LRBT, Rect, Sprite, SpriteList, Text, View
 from pyglet.graphics import Batch, Group
+from pyglet.text.caret import Caret
+from pyglet.text.document import FormattedDocument
+from pyglet.text.layout import IncrementalTextLayout
 
 from superttt.gameview import GameView
 from superttt.lib.gradient import draw_rect_gradient
+from superttt.multiplayer import multiplayer
 
 from .context import nav
 
@@ -207,15 +211,99 @@ class HostView(View):
     def __init__(self, is_local: bool) -> None:
         super().__init__()
         self.is_local: bool = is_local
-        # TODO: text input for name
+
+        self.spritelist = SpriteList()
+        self.text_batch = Batch()
+
+        self.start = Sprite("./resources/superttt/start.png")
+        self.start.scale = 0.5
+        self.start.bottom = 10
+        self.start.right = self.width - 10
+        self.spritelist.append(self.start)
+
+        self.back = Sprite("./resources/superttt/back.png")
+        self.back.scale = 0.5
+        self.back.bottom = 10
+        self.back.left = 10
+        self.spritelist.append(self.back)
+
+        self.name_marker = RectText("Name: ", self.center_x, self.center_y, font_name="Static", font_size=32, anchor_x="right", anchor_y="center", align="right", batch=self.text_batch)
+        self.name_document = FormattedDocument("Host")
+        self.name_rect = LBWH(self.name_marker.right, self.name_marker.bottom, 0.5*self.width, (self.name_marker.top-self.name_marker.bottom))
+        self.name_input = IncrementalTextLayout(self.name_document, self.name_rect.left, self.name_rect.bottom, width=self.name_rect.width, height=self.name_rect.height, anchor_x="left", anchor_y="bottom", batch = self.text_batch)
+        self.name_document.set_style(0, len(self.name_document.text), {"font_name": "Static", "font_size": 32, "color": arcade.color.WHITE})
+        self.name_caret = Caret(self.name_input, color=arcade.color.WHITE)
+        self.name_caret.position = 4
+
+        self.room_code_marker =   Text("Room code: ", self.center_x, self.center_y - 50, anchor_x='right', font_name="Static", font_size=32, batch=self.text_batch)
+        self.room_code_text = RectText("-----------", self.room_code_marker.right, self.room_code_marker.bottom, font_name="Static", font_size=32, batch=self.text_batch)
+
+        self.connections_text = Text("Connections:", self.center_x, self.center_y-65, multiline=True, anchor_x="center", anchor_y="top", align="center", width=0.5 * self.width, font_name="Static", font_size=32, batch=self.text_batch)
+
         # TODO: Marker for who is Player1, Player2, and Host
-
-        # TODO: Setup a Facilitator and local Client
         # TODO: Get own uid, set myself as player1
-        # TODO: show roomcode based on is_local
-
         # TODO: remember player2 and spectators
         # TODO: add ability to swap which player is which
+
+    def on_show_view(self) -> None:
+        multiplayer.start_hosting(self.name_document.text, self.is_local)
+        self.room_code_text.text = multiplayer.room
+
+    def on_hide_view(self) -> None:
+        multiplayer.disconnect()
+
+    def on_text(self, text: str):
+        if text == '\r':
+            return
+        self.name_caret.on_text(text)
+
+    def on_text_motion(self, motion: int, select: bool = False):
+        self.name_caret.on_text_motion(motion, select)
+
+    def on_text_motion_select(self, motion: int):
+        self.name_caret.on_text_motion_select(motion)
+
+    def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
+        pos = (x, y)
+        for button in [self.start, self.back]:
+            is_hovered = pos in button.rect
+            button.color = arcade.color.CYAN if is_hovered else arcade.color.WHITE
+
+    def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int) -> bool | None:
+        self.name_caret.on_mouse_scroll(x, y, scroll_x, scroll_y)
+
+    def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
+        pos = (x, y)
+
+        if pos in self.back.rect:
+            nav.pop()
+            return
+        elif pos in self.start.rect:
+            pass
+        elif pos in self.room_code_text.rect:
+            self.window.set_clipboard_text(multiplayer.room or "No Room Code")
+        elif pos in self.name_rect:
+            self.name_caret.on_mouse_press(x, y, button, modifiers)
+
+    def on_mouse_drag(self, x: int, y: int, dx: int, dy: int, buttons: int, modifiers: int):
+        self.name_caret.on_mouse_drag(x, y, dx, dy, buttons, modifiers)
+
+    def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
+        match symbol:
+            case arcade.key.ENTER:
+                multiplayer.set_name(self.name_document.text)
+            case arcade.key.BACKSPACE:
+                pass # nav.pop()
+
+    def on_draw(self) -> bool | None:
+        self.clear()
+        self.connections_text.text = f"Connections:\n{"\n".join(multiplayer.connections.values())}"
+        draw_rect_gradient(self.window.rect, DARK_GRADIENT[0], DARK_GRADIENT[1])
+        self.spritelist.draw()
+        self.text_batch.draw()
+
+    def on_update(self, delta_time: float) -> bool | None:
+        multiplayer.process()
 
 class JoinView(View):
 
@@ -226,6 +314,13 @@ class JoinView(View):
         # TODO: text input for name
         # TODO: Marker for who is Player1, Player2, and Host
 
+    def on_key_press(self, symbol: int, modifiers: int) -> bool | None:
+        if symbol == arcade.key.BACKSPACE:
+            nav.pop()
+
+    def on_draw(self) -> bool | None:
+        self.clear()
+        draw_rect_gradient(self.window.rect, GRADIENT[0], GRADIENT[1])
 
 class ModeView(View):
     def __init__(self):
@@ -243,14 +338,14 @@ class ModeView(View):
         self.local.scale = 0.5
         self.local.center_x = self.center_x
         self.local.center_y = self.center_y
-        self.local.color = arcade.color.GRAY
+        # self.local.color = arcade.color.GRAY
         self.spritelist.append(self.local)
 
         self.online = Sprite("./resources/superttt/online.png")
         self.online.scale = 0.5
         self.online.center_x = self.center_x
         self.online.center_y = self.height * 0.25
-        self.online.color = arcade.color.GRAY
+        # self.online.color = arcade.color.GRAY
         self.spritelist.append(self.online)
 
         self.back = Sprite("./resources/superttt/back.png")
@@ -260,16 +355,21 @@ class ModeView(View):
         self.spritelist.append(self.back)
 
     def on_mouse_motion(self, x: int, y: int, dx: int, dy: int) -> bool | None:
-        for button in [self.couch, self.back]:
+        for button in [self.couch, self.local, self.online, self.back]:
             if (x, y) in button.rect:
                 button.color = arcade.color.CYAN
             else:
                 button.color = arcade.color.WHITE
 
     def on_mouse_press(self, x: int, y: int, button: int, modifiers: int) -> bool | None:
-        if (x, y) in self.couch.rect:
+        pos = (x, y)
+        if pos in self.couch.rect:
             nav.push(SettingsView())
-        elif (x, y) in self.back.rect:
+        elif pos in self.local.rect:
+            nav.push(HostView(is_local=True))
+        elif pos in self.online.rect:
+            nav.push(HostView(is_local=False))
+        elif pos in self.back.rect:
             nav.pop()
 
     def on_draw(self) -> bool | None:

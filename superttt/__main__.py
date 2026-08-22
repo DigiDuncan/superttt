@@ -1,6 +1,6 @@
 from arcade import load_font
 
-from superttt.multiplayer import Multiplayer
+from superttt.multiplayer import multiplayer
 from superttt.views import StartView
 
 from .context import nav
@@ -22,7 +22,7 @@ def main():
         nav.setup(StartView(), win)
         win.run()
     finally:
-        Multiplayer.disconnect() # Make sure the multiplayer threads actually close
+        multiplayer.disconnect() # Make sure the multiplayer threads actually close
 
 
 if __name__ == "__main__":
